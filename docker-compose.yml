@@ -1,0 +1,20 @@
+version: "3.3"
+services:
+  mysqldb:
+    container_name: mysqldb
+    image: mysql:8
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - /home/mysql/data:/var/lib/mysql
+
+
+  spring_app:
+    image: thourayalouati/devopsimage23
+    container_name: devopscontainer
+    restart: on-failure
+    ports:
+      - 9091:9091
+    depends_on:
+      - mysqldb
