@@ -95,7 +95,7 @@
 <repository>
  <id>deploymentRepo</id>
 <name>Nexus Repository </name>
-<url>http://192.168.170.180:8087/repository/maven-snapshots/</url>
+<url>http://192.168.201.128:8087/repository/maven-snapshots/</url>
 </repository>
 
 
