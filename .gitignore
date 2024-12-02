@@ -31,3 +31,5 @@ build/
 
 ### VS Code ###
 .vscode/
+
+crictl-v1.31.0-linux-amd64.tar.gz
