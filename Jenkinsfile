@@ -38,7 +38,9 @@ pipeline {
         stage('MVN SONARQUBE') {
             steps {
                 script {
-                    sh 'mvn sonar:sonar -Dsonar.login=admin -Dsonar.password=Om07410681ar?'
+                    withSonarQubeEnv('sq1') {  // 'sq1' doit correspondre au nom de l'installation SonarQube dans Jenkins
+                        sh './mvnw clean org.sonarsource.scanner.maven:sonar-maven-plugin:3.9.0.2155:sonar'
+                    }
                 }
             }
         }
