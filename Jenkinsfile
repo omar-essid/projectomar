@@ -38,8 +38,8 @@ pipeline {
         stage('MVN SONARQUBE') {
             steps {
                 script {
-                    withSonarQubeEnv('sq1') {  // 'sq1' doit correspondre au nom de l'installation SonarQube dans Jenkins
-                        sh './mvnw clean org.sonarsource.scanner.maven:sonar-maven-plugin:3.9.0.2155:sonar'
+                    withSonarQubeEnv('sq1') {  // Ensure 'sq1' is correctly configured in Jenkins
+                        sh 'mvn clean org.sonarsource.scanner.maven:sonar-maven-plugin:3.9.0.2155:sonar'
                     }
                 }
             }
