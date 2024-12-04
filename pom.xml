@@ -1,103 +1,114 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
-	<parent>
-		<groupId>org.springframework.boot</groupId>
-		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>2.3.3.RELEASE</version>
-		<relativePath/> <!-- lookup parent from repository -->
-	</parent>
-	<groupId>tn.esprit.spring</groupId>
-	<artifactId>docker-spring-boot</artifactId>
-	<version>0.0.3-SNAPSHOT</version>
-	<packaging>war</packaging>
-	<name>docker-spring-boot</name>
-	<description>docker-spring-boot</description>
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
 
-	<properties>
-		<java.version>1.8</java.version>
-	</properties>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.7.0</version> <!-- Mise à jour vers Spring Boot 2.7.0 -->
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
 
-	<dependencies>
-		
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-web</artifactId>
-		</dependency>
+    <groupId>tn.esprit.spring</groupId>
+    <artifactId>docker-spring-boot</artifactId>
+    <version>0.0.3-SNAPSHOT</version>
+    <packaging>war</packaging>
+    <name>docker-spring-boot</name>
+    <description>docker-spring-boot</description>
 
-		
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-tomcat</artifactId>
-			<scope>provided</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-test</artifactId>
-			<scope>test</scope>
-			<exclusions>
-				<exclusion>
-					<groupId>org.junit.vintage</groupId>
-					<artifactId>junit-vintage-engine</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-	</dependencies>
+    <properties>
+        <!-- Version de Java mise à jour pour Java 17 -->
+        <java.version>17</java.version>
+    </properties>
 
-	<build>
-		<plugins>
-			<plugin>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
-			</plugin>
-			<plugin>
-<artifactId>maven-clean-plugin</artifactId>
-<version>3.1.0</version>
-</plugin>
-<plugin>
-<artifactId>maven-resources-plugin</artifactId>
-<version>3.0.2</version>
-</plugin>
-<plugin>
-<artifactId>maven-compiler-plugin</artifactId>
-<version>3.8.0</version>
-</plugin>
-<plugin>
-<artifactId>maven-surefire-plugin</artifactId>
-<version>2.22.1</version>
-</plugin>
-<plugin>
-<artifactId>maven-jar-plugin</artifactId>
-<version>3.0.2</version>
-</plugin>
-<plugin>
-<artifactId>maven-install-plugin</artifactId>
-<version>2.5.2</version>
-</plugin>
-<plugin>
-<artifactId>maven-deploy-plugin</artifactId>
-<version>2.8.2</version>
-</plugin>
-<plugin>
-<artifactId>maven-site-plugin</artifactId>
-<version>3.7.1</version>
-</plugin>
-<plugin>
-<artifactId>maven-project-info-reports-plugin</artifactId>
-<version>3.0.0</version>
-</plugin>
-		</plugins>
-		<finalName>docker-spring-boot</finalName>
-	</build>
-<distributionManagement>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
 
-<repository>
- <id>deploymentRepo</id>
-<name>Nexus Repository </name>
-<url>http://192.168.88.130:8087/repository/maven-snapshots/</url>
-</repository>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-tomcat</artifactId>
+            <scope>provided</scope>
+        </dependency>
 
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.junit.vintage</groupId>
+                    <artifactId>junit-vintage-engine</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+    </dependencies>
 
-</distributionManagement>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!-- Mise à jour de la version du plugin Maven Clean -->
+            <plugin>
+                <artifactId>maven-clean-plugin</artifactId>
+                <version>3.1.0</version>
+            </plugin>
+
+            <!-- Mise à jour de la version du plugin Maven Compiler pour Java 17 -->
+            <plugin>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.1</version> <!-- Version plus récente du plugin -->
+                <configuration>
+                    <source>17</source>
+                    <target>17</target>
+                </configuration>
+            </plugin>
+
+            <!-- Mise à jour du plugin Maven Surefire pour les tests -->
+            <plugin>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>2.22.2</version> <!-- Version mise à jour -->
+            </plugin>
+
+            <plugin>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.1.0</version> <!-- Version mise à jour -->
+            </plugin>
+
+            <plugin>
+                <artifactId>maven-install-plugin</artifactId>
+                <version>2.5.2</version>
+            </plugin>
+
+            <plugin>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <version>2.8.2</version>
+            </plugin>
+
+            <plugin>
+                <artifactId>maven-site-plugin</artifactId>
+                <version>3.9.1</version> <!-- Mise à jour -->
+            </plugin>
+
+            <plugin>
+                <artifactId>maven-project-info-reports-plugin</artifactId>
+                <version>3.0.0</version>
+            </plugin>
+        </plugins>
+        <finalName>docker-spring-boot</finalName>
+    </build>
+
+    <distributionManagement>
+        <repository>
+            <id>deploymentRepo</id>
+            <name>Nexus Repository</name>
+            <url>http://192.168.88.130:8087/repository/maven-snapshots/</url>
+        </repository>
+    </distributionManagement>
 </project>
