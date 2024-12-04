@@ -21,6 +21,9 @@
         <java.version>17</java.version> <!-- Configuration pour Java 17 -->
         <maven.compiler.source>17</maven.compiler.source> <!-- Source et cible Maven -->
         <maven.compiler.target>17</maven.compiler.target>
+
+        <!-- Ajout de la propriété pour spécifier l'emplacement des fichiers compilés pour SonarQube -->
+        <sonar.java.binaries>${project.build.directory}/classes</sonar.java.binaries>
     </properties>
 
     <dependencies>
@@ -129,3 +132,4 @@
         </repository>
     </distributionManagement>
 </project>
+
