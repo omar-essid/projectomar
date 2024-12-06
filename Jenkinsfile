@@ -4,6 +4,7 @@ pipeline {
         registry = "omarpfe/projectpfe"
         registryCredential = 'dockerHub'
         dockerImage = ''
+        SONAR_TOKEN = credentials('jenkins-sonar') // Utilisation du jeton SonarQube configuré dans Jenkins
     }
     tools {
         maven 'M2_HOME' // Utilisation de l'outil Maven installé sur Jenkins
@@ -39,7 +40,9 @@ pipeline {
             steps {
                 script {
                     withSonarQubeEnv('sq1') {  // Assure-toi que 'sq1' est bien configuré dans Jenkins (via la configuration de SonarQube)
-                        sh 'mvn clean org.sonarsource.scanner.maven:sonar-maven-plugin:3.9.0.2155:sonar' // Exécution de l'analyse SonarQube
+                        withEnv(["SONAR_TOKEN=${env.SONAR_TOKEN}"]) { // Injecte le jeton d'authentification SonarQube dans l'environnement
+                            sh 'mvn clean org.sonarsource.scanner.maven:sonar-maven-plugin:3.9.0.2155:sonar' // Exécution de l'analyse SonarQube
+                        }
                     }
                 }
             }
