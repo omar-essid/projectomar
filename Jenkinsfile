@@ -25,7 +25,7 @@ pipeline {
         stage('ARTIFACT CONSTRUCTION') {
             steps {
                 script {
-                    sh 'mvn package -Dmaven.test.skip=true -P test-coverage' // Construction de l'artifact avec couverture de test
+                    sh 'mvn package -Dmaven.test.skip=true' // Construction de l'artifact sans exécuter les tests
                 }
             }
         }
@@ -48,7 +48,7 @@ pipeline {
                 script {
                     withSonarQubeEnv('sq1') {  // Assure-toi que 'sq1' est bien configuré dans Jenkins (via la configuration de SonarQube)
                         withEnv(["SONAR_TOKEN=${env.SONAR_TOKEN}"]) { // Injecte le jeton d'authentification SonarQube dans l'environnement
-                            sh 'mvn clean org.sonarsource.scanner.maven:sonar-maven-plugin:3.9.0.2155:sonar' // Exécution de l'analyse SonarQube
+                            sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.9.0.2155:sonar'
                         }
                     }
                 }
