@@ -29,6 +29,13 @@ pipeline {
                 }
             }
         }
+        stage('COMPILE') {
+            steps {
+                script {
+                    sh 'mvn compile' // Compilation pour s'assurer que les fichiers de classes sont générés
+                }
+            }
+        }
         stage('UNIT TESTS') {
             steps {
                 script {
