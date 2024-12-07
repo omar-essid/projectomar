@@ -7,7 +7,7 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
         <version>2.7.10</version>
-        <relativePath/> <!-- recherche du parent dans le repository -->
+        <relativePath/>
     </parent>
 
     <groupId>tn.esprit.spring</groupId>
@@ -21,8 +21,6 @@
         <java.version>17</java.version>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
-
-        <!-- Configuration SonarQube -->
         <sonar.java.binaries>${project.build.outputDirectory}</sonar.java.binaries>
     </properties>
 
@@ -69,44 +67,9 @@
             </plugin>
 
             <plugin>
-                <artifactId>maven-clean-plugin</artifactId>
-                <version>3.2.0</version> <!-- Mise à jour -->
-            </plugin>
-
-            <plugin>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.0.0-M7</version> <!-- Mise à jour -->
-            </plugin>
-
-            <plugin>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>3.3.0</version> <!-- Mise à jour -->
-            </plugin>
-
-            <plugin>
-                <artifactId>maven-install-plugin</artifactId>
-                <version>3.0.0-M1</version> <!-- Mise à jour -->
-            </plugin>
-
-            <plugin>
-                <artifactId>maven-deploy-plugin</artifactId>
-                <version>3.0.0-M1</version> <!-- Mise à jour -->
-            </plugin>
-
-            <plugin>
-                <artifactId>maven-site-plugin</artifactId>
-                <version>3.10.0</version> <!-- Mise à jour -->
-            </plugin>
-
-            <plugin>
-                <artifactId>maven-project-info-reports-plugin</artifactId>
-                <version>3.1.2</version> <!-- Mise à jour -->
-            </plugin>
-
-            <plugin>
                 <groupId>org.sonarsource.scanner.maven</groupId>
                 <artifactId>sonar-maven-plugin</artifactId>
-                <version>3.9.1.2184</version> <!-- Mise à jour -->
+                <version>3.9.1.2184</version>
             </plugin>
         </plugins>
     </build>
