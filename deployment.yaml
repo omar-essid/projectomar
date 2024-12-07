@@ -14,9 +14,9 @@ spec:
     spec:
       containers:
       - name: spring-boot-app
-        image: thourayalouati/devopsimage23  # Changer ici
+        image: thourayalouati/devopsimage23  # Votre image Docker
         ports:
-        - containerPort: 8083
+        - containerPort: 9091  # Port d'écoute de l'application Spring Boot dans le conteneur
 ---
 apiVersion: v1
 kind: Service
@@ -25,9 +25,8 @@ metadata:
 spec:
   type: NodePort
   ports:
-  - port: 8083
-    targetPort: 8083
-    nodePort: 30083
+  - port: 9091       # Port d'exposition du service
+    targetPort: 9091  # Le port dans le conteneur
+    nodePort: 30091   # Port externe pour accéder à l'application (peut être différent si nécessaire)
   selector:
     app: spring-boot-app
-
