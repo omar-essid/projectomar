@@ -38,6 +38,13 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- Tomcat Dependency for starter-actuator -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+
         <!-- Spring Boot Test Dependency -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
