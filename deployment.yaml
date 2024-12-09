@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: spring-boot-app
-        image: thourayalouati/devopsimage23  # Votre image Docker
+        image: omarpfe/projectpfe:latest  # Utiliser l'image Docker Hub
         ports:
         - containerPort: 8083  # Port d'écoute du conteneur (Spring Boot)
 ---
