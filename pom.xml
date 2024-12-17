@@ -96,7 +96,7 @@
         <repository>
             <id>deploymentRepo</id>
             <name>Repository Nexus</name>
-            <url>http://admin:0000@192.168.88.130:8087/repository/maven-snapshots/</url>
+            <url>http://admin:0000@192.168.88.130:8081/repository/maven-snapshots/</url>
         </repository>
     </distributionManagement>
 </project>
