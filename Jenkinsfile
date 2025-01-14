@@ -68,6 +68,25 @@ pipeline {
                 }
             }
         }
+        stage('Scan Docker Image with Trivy') {
+            steps {
+                script {
+                    // Run Trivy scan on the built Docker image
+                    sh 'trivy image --exit-code 1 --severity HIGH,CRITICAL ${registry}:latest' // Fail the pipeline if high/critical vulnerabilities are found
+                }
+            }
+        }
+        // Stage added for deployment to Minikube
+        stage('Deploy to Minikube') {
+            steps {
+                script {
+                    // Ensure Minikube is running and kubectl is configured
+                    sh 'minikube start'
+                    sh 'kubectl config use-context minikube' // Set Minikube as the context
+                    sh 'kubectl apply -f k8s/deployment.yaml' // Assuming you have a k8s/deployment.yaml file
+                }
+            }
+        }
         stage('Run Security Analysis Script') {
             steps {
                 script {
