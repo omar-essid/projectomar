@@ -72,7 +72,7 @@ pipeline {
             steps {
                 script {
                     // Run Trivy scan on the built Docker image
-                    sh 'trivy image --timeout 10m --scanners vuln --exit-code 1 --severity HIGH,CRITICAL ${registry}:latest' // Fail the pipeline if high/critical vulnerabilities are found
+                    sh 'trivy image --timeout 15m --scanners vuln --exit-code 1 --severity HIGH,CRITICAL --cache-dir /root/.cache/trivy ${registry}:latest' // Fail the pipeline if high/critical vulnerabilities are found
                 }
             }
         }
