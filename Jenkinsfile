@@ -1,13 +1,13 @@
 pipeline {
     agent any
     environment {
-        registry = "omarpfe/projectpfe"  // Docker Hub repository
+        registry = "omarpfe/projectpfe" // Docker Hub repository
         registryCredential = 'dockerHub' // Jenkins credential for Docker Hub login
         dockerImage = ''
         SONAR_TOKEN = credentials('jenkins-sonar') // SonarQube token for Jenkins
     }
     tools {
-        maven 'M2_HOME'  // Maven tool setup
+        maven 'M2_HOME' // Maven tool setup
     }
     stages {
         stage('Checkout Git') {
@@ -46,7 +46,7 @@ pipeline {
         stage('MVN SONARQUBE') {
             steps {
                 script {
-                    withSonarQubeEnv('sq1') {  // Ensure 'sq1' is configured in Jenkins (via SonarQube configuration)
+                    withSonarQubeEnv('sq1') { // Ensure 'sq1' is configured in Jenkins (via SonarQube configuration)
                         withEnv(["SONAR_TOKEN=${env.SONAR_TOKEN}"]) { // Inject SonarQube token into the environment
                             sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.9.0.2155:sonar'
                         }
@@ -65,6 +65,14 @@ pipeline {
             steps {
                 script {
                     dockerImage = docker.build("${registry}:latest") // Build Docker image using the Dockerfile in the repo
+                }
+            }
+        }
+        stage('Run Security Analysis Script') {
+            steps {
+                script {
+                    // Run the Python script to analyze security configurations
+                    sh 'python3 generate_security_suggestions.py'
                 }
             }
         }
