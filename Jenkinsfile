@@ -80,10 +80,12 @@ pipeline {
         stage('Deploy to Minikube') {
             steps {
                 script {
-                    // Ensure Minikube is running and kubectl is configured
-                    sh 'minikube start'
-                    sh 'kubectl config use-context minikube' // Set Minikube as the context
-                    sh 'kubectl apply -f k8s/deployment.yaml' // Assuming you have a k8s/deployment.yaml file
+                    // SSH to deployment VM and start Minikube
+                    sh '''
+                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 "minikube start"
+                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl config use-context minikube'
+                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl apply -f /root/project/docker-spring-boot/deployment.yaml'
+                    '''
                 }
             }
         }
