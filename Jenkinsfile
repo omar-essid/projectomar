@@ -104,7 +104,8 @@ pipeline {
         stage('Run Security Analysis Script') {
     steps {
         script {
-            sh 'python3 /root/modelAI/generate_security_suggestions.py'
+            sh 'python3 /home/omar/modelAI/generate_security_suggestions.py'
+
         }
     }
 }
