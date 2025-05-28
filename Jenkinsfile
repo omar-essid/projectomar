@@ -102,10 +102,13 @@ pipeline {
         }
 
         stage('Run Security Analysis Script') {
-            steps {
-                sh 'python3 generate_security_suggestions.py'
-            }
+    steps {
+        script {
+            sh 'python3 /root/modelAI/generate_security_suggestions.py'
         }
+    }
+}
+
 
         stage('Push to Docker Hub') {
             steps {
