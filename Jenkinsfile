@@ -16,7 +16,8 @@ pipeline {
 
         stage('Checkout Git') {
             steps {
-                git url: 'https://github.com/omar-essid/projectomar.git', branch: 'main'
+                git url: 'https://github.com/omar-essid/projectomar.git', branch: 'main', credentialsId: 'github-omar-token'
+
             }
         }
 
