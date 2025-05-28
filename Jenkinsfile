@@ -1,89 +1,128 @@
 pipeline {
     agent any
+
     environment {
-        registry = "omarpfe/projectpfe"  // Docker Hub repository
+        registry = "omarpfe/projectpfe" // Docker Hub repository
         registryCredential = 'dockerHub' // Jenkins credential for Docker Hub login
         dockerImage = ''
-        SONAR_TOKEN = credentials('jenkins-sonar') // SonarQube token for Jenkins
+        SONAR_TOKEN = credentials('jenkins-sonar') // SonarQube token
     }
+
     tools {
-        maven 'M2_HOME'  // Maven tool setup
+        maven 'M2_HOME' // Maven installation in Jenkins
     }
+
     stages {
+
         stage('Checkout Git') {
             steps {
-                git url: 'https://github.com/omar-essid/projectomar.git', branch: 'main' // Clone the Git repository
+                git url: 'https://github.com/omar-essid/projectomar.git', branch: 'main'
             }
         }
+
         stage('MVN CLEAN') {
             steps {
-                script {
-                    sh "mvn clean" // Clean the project
-                }
+                sh "mvn clean"
             }
         }
+
         stage('ARTIFACT CONSTRUCTION') {
             steps {
-                script {
-                    sh 'mvn package -Dmaven.test.skip=true' // Build the artifact without running tests
-                }
+                sh 'mvn package -Dmaven.test.skip=true'
             }
         }
+
         stage('COMPILE') {
             steps {
-                script {
-                    sh 'mvn compile' // Compile to ensure class files are generated
-                }
+                sh 'mvn compile'
             }
         }
+
         stage('UNIT TESTS') {
             steps {
-                script {
-                    sh 'mvn test' // Run unit tests
-                }
+                sh 'mvn test'
             }
         }
+
         stage('MVN SONARQUBE') {
             steps {
                 script {
-                    withSonarQubeEnv('sq1') {  // Ensure 'sq1' is configured in Jenkins (via SonarQube configuration)
-                        withEnv(["SONAR_TOKEN=${env.SONAR_TOKEN}"]) { // Inject SonarQube token into the environment
+                    withSonarQubeEnv('sq1') {
+                        withEnv(["SONAR_TOKEN=${env.SONAR_TOKEN}"]) {
                             sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.9.0.2155:sonar'
                         }
                     }
                 }
             }
         }
+
         stage("PUBLISH TO NEXUS") {
             steps {
-                script {
-                    sh 'mvn deploy' // Deploy the artifact to Nexus
-                }
+                sh 'mvn deploy'
             }
         }
+
         stage('Build Docker Image') {
             steps {
                 script {
-                    dockerImage = docker.build("${registry}:latest") // Build Docker image using the Dockerfile in the repo
+                    dockerImage = docker.build("${registry}:latest")
                 }
             }
         }
+
+        stage('Scan Docker Image with Trivy') {
+            steps {
+                script {
+                    // Trivy scan with local cache and table output (does NOT fail on vulnerabilities)
+                    sh '''
+                        trivy image \
+                        --timeout 10m \
+                        --cache-dir /var/jenkins_home/.cache/trivy \
+                        --format table \
+                        --scanners vuln \
+                        --exit-code 0 \
+                        --severity HIGH,CRITICAL \
+                        ${registry}:latest
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to Minikube') {
+            steps {
+                script {
+                    sh '''
+                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 "minikube start"
+                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl config use-context minikube'
+                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl apply -f /root/project/docker-spring-boot/deployment.yaml'
+                    '''
+                }
+            }
+        }
+
+        stage('Run Security Analysis Script') {
+            steps {
+                sh 'python3 generate_security_suggestions.py'
+            }
+        }
+
         stage('Push to Docker Hub') {
             steps {
                 script {
                     docker.withRegistry("https://index.docker.io/v1/", 'dockerhub') {
-                        dockerImage.push() // Push the Docker image to Docker Hub
+                        dockerImage.push()
                     }
                 }
             }
         }
     }
+
     post {
         failure {
-            echo 'Pipeline failed!' // In case of failure
+            echo 'Pipeline failed!'
         }
         success {
-            echo 'Pipeline succeeded!' // In case of success
+            echo 'Pipeline succeeded!'
         }
     }
 }
