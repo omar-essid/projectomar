@@ -78,7 +78,7 @@ pipeline {
                     sh '''
                         trivy image \
                         --timeout 10m \
-                        --cache-dir /var/jenkins_home/.cache/trivy \
+                        --cache-dir /tmp/trivy-cache \
                         --format table \
                         --scanners vuln \
                         --exit-code 0 \
