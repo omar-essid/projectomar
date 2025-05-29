@@ -74,12 +74,9 @@ pipeline {
         stage('Scan Docker Image with Trivy') {
     steps {
         script {
-            // Chemin cache Trivy adapté à Jenkins
             def cacheDir = '/var/cache/trivy-jenkins'
-            
-            // Vérifier que le dossier cache existe et que la DB est présente
             def dbFilesExist = sh (
-                script: "test -d ${cacheDir} && test -f ${cacheDir}/trivy.db",
+                script: "test -d ${cacheDir}/db",
                 returnStatus: true
             ) == 0
 
@@ -87,7 +84,6 @@ pipeline {
                 error "Erreur : La base de données Trivy n'est pas présente dans ${cacheDir}. Veuillez la télécharger manuellement avant de lancer le scan."
             }
 
-            // Lancer le scan sans mise à jour DB
             sh """
                 trivy image \
                 --timeout 10m \
@@ -103,6 +99,7 @@ pipeline {
         }
     }
 }
+
 
 
         stage('Deploy to Minikube') {
