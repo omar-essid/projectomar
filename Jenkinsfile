@@ -74,8 +74,10 @@ pipeline {
         stage('Scan Docker Image with Trivy') {
     steps {
         script {
-            // Vérifier si le dossier de cache Trivy existe et contient les fichiers DB
-            def cacheDir = '/var/cache/trivy'
+            // Chemin cache Trivy adapté à Jenkins
+            def cacheDir = '/var/cache/trivy-jenkins'
+            
+            // Vérifier que le dossier cache existe et que la DB est présente
             def dbFilesExist = sh (
                 script: "test -d ${cacheDir} && test -f ${cacheDir}/trivy.db",
                 returnStatus: true
@@ -101,6 +103,7 @@ pipeline {
         }
     }
 }
+
 
         stage('Deploy to Minikube') {
             steps {
