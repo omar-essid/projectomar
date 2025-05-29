@@ -72,24 +72,35 @@ pipeline {
         }
 
         stage('Scan Docker Image with Trivy') {
-            steps {
-                script {
-                    // Trivy scan with local cache and table output (does NOT fail on vulnerabilities)
-                    sh '''
-                        trivy image \
-                        --timeout 10m \
-                        --cache-dir /var/cache/trivy \
-                        --skip-db-update \
-                        --skip-java-db-update \   
-                        --format table \
-                        --scanners vuln \
-                        --exit-code 0 \
-                        --severity HIGH,CRITICAL \
-                        ${registry}:latest
-                    '''
-                }
+    steps {
+        script {
+            // Vérifier si le dossier de cache Trivy existe et contient les fichiers DB
+            def cacheDir = '/var/cache/trivy'
+            def dbFilesExist = sh (
+                script: "test -d ${cacheDir} && test -f ${cacheDir}/trivy.db",
+                returnStatus: true
+            ) == 0
+
+            if (!dbFilesExist) {
+                error "Erreur : La base de données Trivy n'est pas présente dans ${cacheDir}. Veuillez la télécharger manuellement avant de lancer le scan."
             }
+
+            // Lancer le scan sans mise à jour DB
+            sh """
+                trivy image \
+                --timeout 10m \
+                --cache-dir ${cacheDir} \
+                --skip-db-update \
+                --skip-java-db-update \
+                --format table \
+                --scanners vuln \
+                --exit-code 0 \
+                --severity HIGH,CRITICAL \
+                ${registry}:latest
+            """
         }
+    }
+}
 
         stage('Deploy to Minikube') {
             steps {
