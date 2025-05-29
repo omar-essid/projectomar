@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         registry = "omarpfe/projectpfe" // Docker Hub repository
-        registryCredential = 'dockerHub' // Jenkins credential for Docker Hub login
+        registryCredential = 'dockerhub' // Jenkins credential for Docker Hub login
         dockerImage = ''
         SONAR_TOKEN = credentials('jenkins-sonar') // SonarQube token
     }
@@ -101,16 +101,7 @@ pipeline {
             }
         }
 
-        stage('Run Security Analysis Script') {
-    steps {
-        script {
-            sh 'python3 /home/omar/modelAI/generate_security_suggestions.py'
-
-        }
-    }
-}
-
-
+        
         stage('Push to Docker Hub') {
             steps {
                 script {
