@@ -4,7 +4,6 @@ pipeline {
     environment {
         registry = "omarpfe/projectpfe"
         registryCredential = 'dockerhub'
-        dockerImage = ''
         SONAR_TOKEN = credentials('jenkins-sonar')
     }
 
@@ -13,50 +12,47 @@ pipeline {
     }
 
     stages {
-
         stage('Checkout Git') {
             steps {
                 git url: 'https://github.com/omar-essid/projectomar.git', branch: 'main', credentialsId: 'github-omar-token'
             }
         }
 
-        stage('MVN CLEAN') {
+        stage('Clean') {
             steps {
                 sh "mvn clean"
             }
         }
 
-        stage('ARTIFACT CONSTRUCTION') {
+        stage('Compile') {
             steps {
-                sh 'mvn package -Dmaven.test.skip=true'
+                sh "mvn compile"
             }
         }
 
-        stage('COMPILE') {
+        stage('Package') {
             steps {
-                sh 'mvn compile'
+                sh "mvn package -Dmaven.test.skip=true"
             }
         }
 
-        stage('UNIT TESTS') {
+        stage('Tests') {
             steps {
-                sh 'mvn test'
+                sh "mvn test"
             }
         }
 
-        stage('MVN SONARQUBE') {
+        stage('Analyse SonarQube') {
             steps {
-                script {
-                    withSonarQubeEnv('sq1') {
-                        withEnv(["SONAR_TOKEN=${env.SONAR_TOKEN}"]) {
-                            sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.9.0.2155:sonar'
-                        }
+                withSonarQubeEnv('sq1') {
+                    withEnv(["SONAR_TOKEN=${env.SONAR_TOKEN}"]) {
+                        sh "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.9.0.2155:sonar"
                     }
                 }
             }
         }
 
-        stage("PUBLISH TO NEXUS") {
+        stage('Deploy to Nexus') {
             steps {
                 sh 'mvn deploy'
             }
@@ -74,25 +70,36 @@ pipeline {
             steps {
                 script {
                     def cacheDir = '/home/jenkins/trivy-cache'
-                    def dbFilesExist = sh(
-                        script: "test -d ${cacheDir}/db",
-                        returnStatus: true
-                    ) == 0
+                    def dbFilesExist = sh(script: "test -d ${cacheDir}/db", returnStatus: true) == 0
 
                     if (!dbFilesExist) {
-                        error "Erreur : La base de données Trivy n'est pas présente dans ${cacheDir}. Veuillez la télécharger manuellement avant de lancer le scan."
+                        echo "⚠️ Base Trivy absente dans ${cacheDir}. Le scan est ignoré. Téléchargez-la manuellement si nécessaire."
+                    } else {
+                        sh """
+                            trivy image \
+                            --timeout 10m \
+                            --cache-dir ${cacheDir} \
+                            --format table \
+                            --scanners vuln \
+                            --exit-code 0 \
+                            --severity HIGH,CRITICAL \
+                            ${registry}:latest
+                        """
                     }
+                }
+            }
+        }
 
-                    sh """
-                        trivy image \
-                        --timeout 10m \
-                        --cache-dir ${cacheDir} \
-                        --format table \
-                        --scanners vuln \
-                        --exit-code 0 \
-                        --severity HIGH,CRITICAL \
-                        ${registry}:latest
-                    """
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    echo "🟢 Push vers Docker Hub..."
+                    timeout(time: 10, unit: 'MINUTES') {
+                        docker.withRegistry("https://index.docker.io/v1/", registryCredential) {
+                            dockerImage.push("latest")
+                        }
+                    }
+                    echo "✅ Push terminé avec succès."
                 }
             }
         }
@@ -108,28 +115,14 @@ pipeline {
                 }
             }
         }
-
-        stage('Push to Docker Hub') {
-            steps {
-                script {
-                    echo "Début du push Docker..."
-                    timeout(time: 3, unit: 'MINUTES') {
-                        docker.withRegistry("https://index.docker.io/v1/", registryCredential) {
-                            dockerImage.push()
-                        }
-                    }
-                    echo "Push Docker terminé avec succès."
-                }
-            }
-        }
     }
 
     post {
-        failure {
-            echo 'Pipeline failed!'
-        }
         success {
-            echo 'Pipeline succeeded!'
+            echo "✅ Pipeline terminé avec succès."
+        }
+        failure {
+            echo "❌ Échec du pipeline. Vérifiez les logs."
         }
     }
 }
