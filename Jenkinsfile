@@ -90,19 +90,19 @@ pipeline {
             }
         }
 
-        stage('Push Docker Image') {
-            steps {
-                script {
-                    echo "🟢 Push vers Docker Hub..."
-                    timeout(time: 10, unit: 'MINUTES') {
-                        docker.withRegistry("https://index.docker.io/v1/", registryCredential) {
-                            dockerImage.push("latest")
-                        }
-                    }
-                    echo "✅ Push terminé avec succès."
-                }
-            }
+        stage('Push to Docker Hub') {
+    steps {
+        script {
+            echo "Push Docker avec commande shell manuelle"
+            sh '''
+                docker login -u omarpfe -p 'kd8CB%4CfH&hDkk'
+                docker tag omarpfe/projectpfe:latest omarpfe/projectpfe:latest
+                docker push omarpfe/projectpfe:latest
+            '''
         }
+    }
+}
+
 
         stage('Deploy to Minikube') {
             steps {
