@@ -6,7 +6,6 @@ pipeline {
         registryCredential = 'dockerhub'
         dockerImage = ''
         SONAR_TOKEN = credentials('jenkins-sonar')
-        TRIVY_CACHE_DIR = "/home/jenkins/trivy-cache"
     }
 
     tools {
@@ -14,6 +13,7 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout Git') {
             steps {
                 git url: 'https://github.com/omar-essid/projectomar.git', branch: 'main', credentialsId: 'github-omar-token'
@@ -73,11 +73,20 @@ pipeline {
         stage('Scan Docker Image with Trivy') {
             steps {
                 script {
+                    def cacheDir = '/home/jenkins/trivy-cache'
+                    def dbFilesExist = sh(
+                        script: "test -d ${cacheDir}/db",
+                        returnStatus: true
+                    ) == 0
+
+                    if (!dbFilesExist) {
+                        error "Erreur : La base de données Trivy n'est pas présente dans ${cacheDir}. Veuillez la télécharger manuellement avant de lancer le scan."
+                    }
+
                     sh """
                         trivy image \
-                        --timeout 30m \
-                        --skip-db-update \
-                        --cache-dir ${TRIVY_CACHE_DIR} \
+                        --timeout 10m \
+                        --cache-dir ${cacheDir} \
                         --format table \
                         --scanners vuln \
                         --exit-code 0 \
@@ -102,9 +111,12 @@ pipeline {
 
         stage('Push to Docker Hub') {
             steps {
-                script {
-                    docker.withRegistry("https://index.docker.io/v1/", registryCredential) {
-                        dockerImage.push()
+                timeout(time: 5, unit: 'MINUTES') {
+                    script {
+                        docker.withRegistry("https://index.docker.io/v1/", registryCredential) {
+                            dockerImage.push('latest')
+                        }
+                        echo 'Docker push terminé'
                     }
                 }
             }
