@@ -78,7 +78,7 @@ pipeline {
                     sh '''
                         trivy image \
                         --timeout 10m \
-                        --cache-dir /tmp/trivy-cache \
+                        --cache-dir /var/cache/trivy \
                         --format table \
                         --scanners vuln \
                         --exit-code 0 \
