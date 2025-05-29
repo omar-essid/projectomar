@@ -2,10 +2,10 @@ pipeline {
     agent any
 
     environment {
-        registry = "omarpfe/projectpfe"              // Nom de l'image Docker
-        registryCredential = 'dockerhub'             // Identifiant Jenkins pour Docker Hub
+        registry = "omarpfe/projectpfe"
+        registryCredential = 'dockerhub'
         dockerImage = ''
-        SONAR_TOKEN = credentials('jenkins-sonar')   // Token SonarQube
+        SONAR_TOKEN = credentials('jenkins-sonar')
     }
 
     tools {
@@ -20,19 +20,31 @@ pipeline {
             }
         }
 
-        stage('Clean & Build') {
+        stage('MVN CLEAN') {
             steps {
-                sh 'mvn clean package -Dmaven.test.skip=true'
+                sh "mvn clean"
             }
         }
 
-        stage('Unit Tests') {
+        stage('ARTIFACT CONSTRUCTION') {
+            steps {
+                sh 'mvn package -Dmaven.test.skip=true'
+            }
+        }
+
+        stage('COMPILE') {
+            steps {
+                sh 'mvn compile'
+            }
+        }
+
+        stage('UNIT TESTS') {
             steps {
                 sh 'mvn test'
             }
         }
 
-        stage('Analyse SonarQube') {
+        stage('MVN SONARQUBE') {
             steps {
                 script {
                     withSonarQubeEnv('sq1') {
@@ -44,7 +56,7 @@ pipeline {
             }
         }
 
-        stage('Publish to Nexus') {
+        stage("PUBLISH TO NEXUS") {
             steps {
                 sh 'mvn deploy'
             }
@@ -58,29 +70,41 @@ pipeline {
             }
         }
 
-        stage('Trivy Scan') {
+        stage('Scan Docker Image with Trivy') {
             steps {
                 script {
-                    def cacheDir = '/var/cache/trivy-jenkins'
-                    def dbExists = sh(
+                    def cacheDir = '/home/jenkins/trivy-cache'
+                    def dbFilesExist = sh(
                         script: "test -d ${cacheDir}/db",
                         returnStatus: true
                     ) == 0
 
-                    if (!dbExists) {
-                        error "La base de données Trivy est manquante dans ${cacheDir}. Télécharge-la manuellement."
+                    if (!dbFilesExist) {
+                        error "Erreur : La base de données Trivy n'est pas présente dans ${cacheDir}. Veuillez la télécharger manuellement avant de lancer le scan."
                     }
 
                     sh """
                         trivy image \
-                          --timeout 10m \
-                          --cache-dir ${cacheDir} \
-                          --format table \
-                          --scanners vuln \
-                          --exit-code 0 \
-                          --severity HIGH,CRITICAL \
-                          ${registry}:latest
+                        --timeout 10m \
+                        --cache-dir ${cacheDir} \
+                        --format table \
+                        --scanners vuln \
+                        --exit-code 0 \
+                        --severity HIGH,CRITICAL \
+                        ${registry}:latest
                     """
+                }
+            }
+        }
+
+        stage('Deploy to Minikube') {
+            steps {
+                script {
+                    sh '''
+                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 "minikube start"
+                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl config use-context minikube'
+                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl apply -f /root/project/docker-spring-boot/deployment.yaml'
+                    '''
                 }
             }
         }
@@ -94,26 +118,14 @@ pipeline {
                 }
             }
         }
-
-        stage('Deploy to Minikube') {
-            steps {
-                script {
-                    sh '''
-                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 "minikube start"
-                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 "kubectl config use-context minikube"
-                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 "kubectl apply -f /root/project/docker-spring-boot/deployment.yaml"
-                    '''
-                }
-            }
-        }
     }
 
     post {
         failure {
-            echo '❌ Pipeline failed!'
+            echo 'Pipeline failed!'
         }
         success {
-            echo '✅ Pipeline succeeded!'
+            echo 'Pipeline succeeded!'
         }
     }
 }
