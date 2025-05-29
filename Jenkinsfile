@@ -111,13 +111,14 @@ pipeline {
 
         stage('Push to Docker Hub') {
             steps {
-                timeout(time: 5, unit: 'MINUTES') {
-                    script {
+                script {
+                    echo "Début du push Docker..."
+                    timeout(time: 3, unit: 'MINUTES') {
                         docker.withRegistry("https://index.docker.io/v1/", registryCredential) {
-                            dockerImage.push('latest')
+                            dockerImage.push()
                         }
-                        echo 'Docker push terminé'
                     }
+                    echo "Push Docker terminé avec succès."
                 }
             }
         }
