@@ -88,8 +88,7 @@ pipeline {
                 trivy image \
                 --timeout 10m \
                 --cache-dir ${cacheDir} \
-                --skip-db-update \
-                --skip-java-db-update \
+                
                 --format table \
                 --scanners vuln \
                 --exit-code 0 \
