@@ -1,0 +1,47 @@
+{
+  "environments": {
+    "development": {
+      "jenkins": {
+        "ip": "192.168.88.130",
+        "host": "server",
+        "logs": "/var/lib/jenkins/jobs/springboot/builds/9/log",
+        "version": "2.440.3",
+        "user": "jenkins"
+      },
+      "sonarqube": {
+        "ip": "192.168.88.130",
+        "host": "server",
+        "logs": "/var/lib/jenkins/workspace/springboot/target/sonar/report-task.txt",
+        "version": "9.9.4-community",
+        "user": "jenkins"
+      },
+      "trivy": {
+        "ip": "192.168.88.130",
+        "host": "server",
+        "logs": "/home/jenkins/trivy-cache/logs/trivy.log",
+        "version": "0.51.1",
+        "user": "jenkins"
+      }
+    },
+    "deployment": {
+      "minikube": {
+        "ip": "192.168.88.131",
+        "host": "deployment",
+        "command": "kubectl get all -o yaml",
+        "version": "v1.33.1",
+        "user": "omar"
+      },
+      "springboot-app": {
+        "ip": "192.168.88.131",
+        "host": "deployment",
+        "namespace": "default",
+        "deployment": "springboot-deployment",
+        "container": "springboot-container",
+        "version": "3.2.5",
+        "user": "omar"
+      }
+    }
+  },
+  "logfile": "/opt/devsecops-ai/scan-inputs/full_logs.log",
+  "last_updated": "2025-06-08T12:00:00Z"
+}
