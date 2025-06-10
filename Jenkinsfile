@@ -12,37 +12,37 @@ pipeline {
     }
 
     stages {
-        stage('Checkout Git') {
+        stage('🔄 Checkout Git') {
             steps {
                 git url: 'https://github.com/omar-essid/projectomar.git', branch: 'main', credentialsId: 'github-omar-token'
             }
         }
 
-        stage('Clean') {
+        stage('🧹 Clean') {
             steps {
                 sh "mvn clean"
             }
         }
 
-        stage('Compile') {
+        stage('⚙️ Compile') {
             steps {
                 sh "mvn compile"
             }
         }
 
-        stage('Package') {
+        stage('📦 Package') {
             steps {
                 sh "mvn package -Dmaven.test.skip=true"
             }
         }
 
-        stage('Tests') {
+        stage('✅ Tests') {
             steps {
                 sh "mvn test"
             }
         }
 
-        stage('Analyse SonarQube') {
+        stage('🔍 Analyse SonarQube') {
             steps {
                 withSonarQubeEnv('sq1') {
                     withEnv(["SONAR_TOKEN=${env.SONAR_TOKEN}"]) {
@@ -52,13 +52,13 @@ pipeline {
             }
         }
 
-        stage('Deploy to Nexus') {
+        stage('📤 Deploy to Nexus') {
             steps {
                 sh 'mvn deploy'
             }
         }
 
-        stage('Build Docker Image') {
+        stage('🐳 Build Docker Image') {
             steps {
                 script {
                     dockerImage = docker.build("${registry}:latest")
@@ -66,14 +66,14 @@ pipeline {
             }
         }
 
-        stage('Scan Docker Image with Trivy') {
+        stage('🛡 Scan Docker Image with Trivy') {
             steps {
                 script {
                     def cacheDir = '/home/jenkins/trivy-cache'
                     def dbFilesExist = sh(script: "test -d ${cacheDir}/db", returnStatus: true) == 0
 
                     if (!dbFilesExist) {
-                        echo "⚠️ Base Trivy absente dans ${cacheDir}. Le scan est ignoré. Téléchargez-la manuellement si nécessaire."
+                        echo "⚠️ Base Trivy absente dans ${cacheDir}. Le scan est ignoré."
                     } else {
                         sh """
                             trivy image \
@@ -90,21 +90,20 @@ pipeline {
             }
         }
 
-        stage('Push to Docker Hub') {
-    steps {
-        script {
-            echo "Push Docker avec commande shell manuelle"
-            sh '''
-                docker login -u omarpfe -p 'kd8CB%4CfH&hDkk'
-                docker tag omarpfe/projectpfe:latest omarpfe/projectpfe:latest
-                docker push omarpfe/projectpfe:latest
-            '''
+        stage('📤 Push to Docker Hub') {
+            steps {
+                script {
+                    echo "Push Docker vers DockerHub"
+                    sh '''
+                        docker login -u omarpfe -p 'kd8CB%4CfH&hDkk'
+                        docker tag omarpfe/projectpfe:latest omarpfe/projectpfe:latest
+                        docker push omarpfe/projectpfe:latest
+                    '''
+                }
+            }
         }
-    }
-}
 
-
-        stage('Deploy to Minikube') {
+        stage('🚀 Deploy to Minikube') {
             steps {
                 script {
                     sh '''
@@ -112,6 +111,24 @@ pipeline {
                         sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl config use-context minikube'
                         sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl apply -f /root/project/docker-spring-boot/deployment.yaml'
                     '''
+                }
+            }
+        }
+
+        stage('📥 Collecte Logs & CMDB') {
+            steps {
+                script {
+                    echo "📦 Collecte des logs (Jenkins, Trivy, Minikube) + snapshot CMDB"
+                    sh 'bash collect_full_logs.sh'
+                }
+            }
+        }
+
+        stage('🤖 Analyse IA (CodeBERT + CodeT5)') {
+            steps {
+                script {
+                    echo "🧠 Lancement de l’analyse IA avec script-model-ai-codet5-codebert.py"
+                    sh 'python3 script-model-ai-codet5-codebert.py'
                 }
             }
         }
