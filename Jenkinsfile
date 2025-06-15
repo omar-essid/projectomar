@@ -66,29 +66,39 @@ pipeline {
             }
         }
 
+        stage('Prepare Trivy Cache') {
+            steps {
+                script {
+                    def cacheDir = '/opt/trivy/cache'
+                    sh "sudo mkdir -p ${cacheDir}"
+                    sh "sudo chown -R jenkins:jenkins ${cacheDir}"
+
+                    def cacheExists = sh(script: "sudo -u jenkins test -f ${cacheDir}/trivy.db", returnStatus: true) == 0
+
+                    if (!cacheExists) {
+                        echo "⚠️ Cache Trivy absent, initialisation en cours..."
+                        sh "sudo -u jenkins trivy image --cache-dir ${cacheDir} alpine:latest || true"
+                    } else {
+                        echo "✅ Cache Trivy déjà présent, pas besoin de le recréer."
+                    }
+                }
+            }
+        }
+
         stage('Scan Docker Image with Trivy') {
             steps {
                 script {
                     def cacheDir = '/opt/trivy/cache'
-                    def dbExists = sh(script: "test -f ${cacheDir}/trivy.db", returnStatus: true) == 0
-
-                    if (!dbExists) {
-                        echo "⚠️ Cache Trivy introuvable dans ${cacheDir}. Le scan est ignoré. Veuillez initialiser manuellement avec :"
-                        echo "   trivy image --cache-dir ${cacheDir} alpine:latest"
-                    } else {
-                        echo "🔍 Scan de l'image Docker avec Trivy..."
-                        sh """
-                            trivy image \
-                              --cache-dir ${cacheDir} \
-                              --skip-db-update \
-                              --skip-java-db-update \
-                              --format table \
-                              --scanners vuln \
-                              --exit-code 0 \
-                              --severity HIGH,CRITICAL \
-                              ${registry}:latest
-                        """
-                    }
+                    sh """
+                        trivy image \
+                        --cache-dir ${cacheDir} \
+                        --skip-db-update \
+                        --format table \
+                        --scanners vuln \
+                        --exit-code 0 \
+                        --severity HIGH,CRITICAL \
+                        ${registry}:latest
+                    """
                 }
             }
         }
