@@ -5,7 +5,6 @@ pipeline {
         registry = "omarpfe/projectpfe"
         registryCredential = 'dockerhub'
         SONAR_TOKEN = credentials('jenkins-sonar')
-        TRIVY_CACHE_DIR = '/home/jenkins/trivy-cache'
     }
 
     tools {
@@ -70,22 +69,24 @@ pipeline {
         stage('Scan Docker Image with Trivy') {
             steps {
                 script {
-                    // Vérifie si le dossier cache db Trivy existe
-                    def dbFilesExist = sh(script: "test -d ${env.TRIVY_CACHE_DIR}/db", returnStatus: true) == 0
+                    def cacheDir = '/opt/trivy/cache'
+                    def dbExists = sh(script: "test -f ${cacheDir}/trivy.db", returnStatus: true) == 0
 
-                    if (!dbFilesExist) {
-                        echo "⚠️ Base Trivy absente dans ${env.TRIVY_CACHE_DIR}. Le scan est ignoré. Téléchargez-la manuellement si nécessaire."
+                    if (!dbExists) {
+                        echo "⚠️ Cache Trivy introuvable dans ${cacheDir}. Le scan est ignoré. Veuillez initialiser manuellement avec :"
+                        echo "   trivy image --cache-dir ${cacheDir} alpine:latest"
                     } else {
+                        echo "🔍 Scan de l'image Docker avec Trivy..."
                         sh """
                             trivy image \
-                            --timeout 10m \
-                            --cache-dir ${env.TRIVY_CACHE_DIR} \
-                            --skip-update \
-                            --format table \
-                            --scanners vuln \
-                            --exit-code 0 \
-                            --severity HIGH,CRITICAL \
-                            ${registry}:latest
+                              --cache-dir ${cacheDir} \
+                              --skip-db-update \
+                              --skip-java-db-update \
+                              --format table \
+                              --scanners vuln \
+                              --exit-code 0 \
+                              --severity HIGH,CRITICAL \
+                              ${registry}:latest
                         """
                     }
                 }
@@ -96,11 +97,10 @@ pipeline {
             steps {
                 script {
                     echo "📦 Pushing Docker image to Docker Hub"
-                    // Utiliser avec précaution la gestion des secrets (voir Jenkins Credentials pour sécuriser)
                     sh '''
-                        echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-                        docker tag ${registry}:latest ${registry}:latest
-                        docker push ${registry}:latest
+                        docker login -u omarpfe -p 'kd8CB%4CfH&hDkk'
+                        docker tag omarpfe/projectpfe:latest omarpfe/projectpfe:latest
+                        docker push omarpfe/projectpfe:latest
                     '''
                 }
             }
