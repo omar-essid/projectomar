@@ -5,6 +5,7 @@ pipeline {
         registry = "omarpfe/projectpfe"
         registryCredential = 'dockerhub'
         SONAR_TOKEN = credentials('jenkins-sonar')
+        TRIVY_CACHE_DIR = '/home/jenkins/trivy-cache'
     }
 
     tools {
@@ -69,16 +70,17 @@ pipeline {
         stage('Scan Docker Image with Trivy') {
             steps {
                 script {
-                    def cacheDir = '/home/jenkins/trivy-cache'
-                    def dbFilesExist = sh(script: "test -d ${cacheDir}/db", returnStatus: true) == 0
+                    // Vérifie si le dossier cache db Trivy existe
+                    def dbFilesExist = sh(script: "test -d ${env.TRIVY_CACHE_DIR}/db", returnStatus: true) == 0
 
                     if (!dbFilesExist) {
-                        echo "⚠️ Base Trivy absente dans ${cacheDir}. Le scan est ignoré. Téléchargez-la manuellement si nécessaire."
+                        echo "⚠️ Base Trivy absente dans ${env.TRIVY_CACHE_DIR}. Le scan est ignoré. Téléchargez-la manuellement si nécessaire."
                     } else {
                         sh """
                             trivy image \
                             --timeout 10m \
-                            --cache-dir ${cacheDir} \
+                            --cache-dir ${env.TRIVY_CACHE_DIR} \
+                            --skip-update \
                             --format table \
                             --scanners vuln \
                             --exit-code 0 \
@@ -94,10 +96,11 @@ pipeline {
             steps {
                 script {
                     echo "📦 Pushing Docker image to Docker Hub"
+                    // Utiliser avec précaution la gestion des secrets (voir Jenkins Credentials pour sécuriser)
                     sh '''
-                        docker login -u omarpfe -p 'kd8CB%4CfH&hDkk'
-                        docker tag omarpfe/projectpfe:latest omarpfe/projectpfe:latest
-                        docker push omarpfe/projectpfe:latest
+                        echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+                        docker tag ${registry}:latest ${registry}:latest
+                        docker push ${registry}:latest
                     '''
                 }
             }
