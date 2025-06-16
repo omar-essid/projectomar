@@ -2,76 +2,127 @@ pipeline {
     agent any
 
     environment {
-        REGISTRY = "omarpfe/projectpfe"
-        DOCKER_CREDENTIALS = 'dockerHub'       // Id des credentials Jenkins Docker Hub
-        TRIVY_CACHE = "/opt/trivy/cache"
-        IMAGE_TAG = "${REGISTRY}:latest"
+        registry = "omarpfe/projectpfe"
+        registryCredential = 'dockerhub'
+        SONAR_TOKEN = credentials('jenkins-sonar')
+    }
+
+    tools {
+        maven 'M2_HOME'
     }
 
     stages {
-        stage('Build Docker Image') {
+        stage('Checkout Git') {
             steps {
-                echo "🔨 Build Docker image"
-                script {
-                    dockerImage = docker.build("${IMAGE_TAG}")
-                }
+                git url: 'https://github.com/omar-essid/projectomar.git', branch: 'main', credentialsId: 'github-omar-token'
             }
         }
 
-        stage('Prepare Trivy Cache') {
+        stage('Clean') {
             steps {
-                echo "📁 Préparation du cache Trivy"
-                // Si le dossier de cache n'existe pas, on le crée
-                sh '''
-                    if [ ! -d "${TRIVY_CACHE}" ]; then
-                        mkdir -p ${TRIVY_CACHE}
-                    fi
-                    # On fait un premier scan simple pour initialiser la DB (éviter l'erreur skip-db-update sur premier run)
-                    if [ ! -f "${TRIVY_CACHE}/trivy.db" ]; then
-                        trivy image --cache-dir ${TRIVY_CACHE} --format table --severity HIGH,CRITICAL alpine:latest
-                    fi
-                '''
+                sh "mvn clean"
             }
         }
 
-        stage('Scan Docker Image with Trivy') {
+        stage('Compile') {
             steps {
-                echo "🔍 Analyse vulnérabilités avec Trivy"
-                sh """
-                    trivy image --cache-dir ${TRIVY_CACHE} --format table --scanners vuln --severity HIGH,CRITICAL ${IMAGE_TAG} || true
-                """
+                sh "mvn compile"
             }
         }
 
-        stage('Push Docker Image to Docker Hub') {
+        stage('Package') {
             steps {
-                echo "📦 Push de l'image Docker vers Docker Hub"
-                script {
-                    docker.withRegistry('https://registry.hub.docker.com', DOCKER_CREDENTIALS) {
-                        dockerImage.push()
+                sh "mvn package -Dmaven.test.skip=true"
+            }
+        }
+
+        stage('Tests') {
+            steps {
+                sh "mvn test"
+            }
+        }
+
+        stage('Analyse SonarQube') {
+            steps {
+                withSonarQubeEnv('sq1') {
+                    withEnv(["SONAR_TOKEN=${env.SONAR_TOKEN}"]) {
+                        sh "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.9.0.2155:sonar"
                     }
                 }
             }
         }
 
+        stage('Deploy to Nexus') {
+            steps {
+                sh 'mvn deploy'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    dockerImage = docker.build("${registry}:latest")
+                }
+            }
+        }
+
+        stage('Scan Docker Image with Trivy') {
+            steps {
+                script {
+                    def cacheDir = '/home/jenkins/trivy-cache'
+                    def dbFilesExist = sh(script: "test -d ${cacheDir}/db", returnStatus: true) == 0
+
+                    if (!dbFilesExist) {
+                        echo "⚠️ Base Trivy absente dans ${cacheDir}. Le scan est ignoré. Téléchargez-la manuellement si nécessaire."
+                    } else {
+                        sh """
+                            trivy image \
+                            --timeout 10m \
+                            --cache-dir ${cacheDir} \
+                            --format table \
+                            --scanners vuln \
+                            --exit-code 0 \
+                            --severity HIGH,CRITICAL \
+                            ${registry}:latest
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Push to Docker Hub') {
+    steps {
+        script {
+            echo "Push Docker avec commande shell manuelle"
+            sh '''
+                docker login -u omarpfe -p 'kd8CB%4CfH&hDkk'
+                docker tag omarpfe/projectpfe:latest omarpfe/projectpfe:latest
+                docker push omarpfe/projectpfe:latest
+            '''
+        }
+    }
+}
+
+
         stage('Deploy to Minikube') {
             steps {
-                echo "🚀 Déploiement sur Minikube"
-                // Exemple simple, adapter selon ton déploiement
-                sh '''
-                    kubectl apply -f k8s/deployment.yaml
-                    kubectl rollout status deployment/my-deployment
-                '''
+                script {
+                    sh '''
+                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 "minikube start"
+                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl config use-context minikube'
+                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl apply -f /root/project/docker-spring-boot/deployment.yaml'
+                    '''
+                }
             }
         }
     }
 
     post {
         success {
-            echo "✅ Pipeline terminé avec succès"
+            echo "✅ Pipeline terminé avec succès."
         }
         failure {
-            echo "❌ Pipeline échoué"
+            echo "❌ Échec du pipeline. Vérifiez les logs."
         }
     }
 }
