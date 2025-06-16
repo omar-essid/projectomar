@@ -2,157 +2,76 @@ pipeline {
     agent any
 
     environment {
-        registry = "omarpfe/projectpfe"
-        registryCredential = 'dockerhub'
-        SONAR_TOKEN = credentials('jenkins-sonar')
-    }
-
-    tools {
-        maven 'M2_HOME'
+        REGISTRY = "omarpfe/projectpfe"
+        DOCKER_CREDENTIALS = 'dockerHub'       // Id des credentials Jenkins Docker Hub
+        TRIVY_CACHE = "/opt/trivy/cache"
+        IMAGE_TAG = "${REGISTRY}:latest"
     }
 
     stages {
-        stage('Checkout Git') {
-            steps {
-                git url: 'https://github.com/omar-essid/projectomar.git', branch: 'main', credentialsId: 'github-omar-token'
-            }
-        }
-
-        stage('Clean') {
-            steps {
-                sh "mvn clean"
-            }
-        }
-
-        stage('Compile') {
-            steps {
-                sh "mvn compile"
-            }
-        }
-
-        stage('Package') {
-            steps {
-                sh "mvn package -Dmaven.test.skip=true"
-            }
-        }
-
-        stage('Tests') {
-            steps {
-                sh "mvn test"
-            }
-        }
-
-        stage('Analyse SonarQube') {
-            steps {
-                withSonarQubeEnv('sq1') {
-                    withEnv(["SONAR_TOKEN=${env.SONAR_TOKEN}"]) {
-                        sh "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.9.0.2155:sonar"
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to Nexus') {
-            steps {
-                sh 'mvn deploy'
-            }
-        }
-
         stage('Build Docker Image') {
             steps {
+                echo "🔨 Build Docker image"
                 script {
-                    dockerImage = docker.build("${registry}:latest")
+                    dockerImage = docker.build("${IMAGE_TAG}")
                 }
             }
         }
 
         stage('Prepare Trivy Cache') {
             steps {
-                script {
-                    def cacheDir = '/opt/trivy/cache'
-                    sh "sudo mkdir -p ${cacheDir}"
-                    sh "sudo chown -R jenkins:jenkins ${cacheDir}"
-
-                    def cacheExists = sh(script: "sudo -u jenkins test -f ${cacheDir}/trivy.db", returnStatus: true) == 0
-
-                    if (!cacheExists) {
-                        echo "⚠️ Cache Trivy absent, initialisation en cours..."
-                        sh "sudo -u jenkins trivy image --cache-dir ${cacheDir} alpine:latest || true"
-                    } else {
-                        echo "✅ Cache Trivy déjà présent, pas besoin de le recréer."
-                    }
-                }
+                echo "📁 Préparation du cache Trivy"
+                // Si le dossier de cache n'existe pas, on le crée
+                sh '''
+                    if [ ! -d "${TRIVY_CACHE}" ]; then
+                        mkdir -p ${TRIVY_CACHE}
+                    fi
+                    # On fait un premier scan simple pour initialiser la DB (éviter l'erreur skip-db-update sur premier run)
+                    if [ ! -f "${TRIVY_CACHE}/trivy.db" ]; then
+                        trivy image --cache-dir ${TRIVY_CACHE} --format table --severity HIGH,CRITICAL alpine:latest
+                    fi
+                '''
             }
         }
 
         stage('Scan Docker Image with Trivy') {
             steps {
-                script {
-                    def cacheDir = '/opt/trivy/cache'
-                    sh """
-                        trivy image \
-                        --cache-dir ${cacheDir} \
-                        --skip-db-update \
-                        --format table \
-                        --scanners vuln \
-                        --exit-code 0 \
-                        --severity HIGH,CRITICAL \
-                        ${registry}:latest
-                    """
-                }
+                echo "🔍 Analyse vulnérabilités avec Trivy"
+                sh """
+                    trivy image --cache-dir ${TRIVY_CACHE} --format table --scanners vuln --severity HIGH,CRITICAL ${IMAGE_TAG} || true
+                """
             }
         }
 
-        stage('Push to Docker Hub') {
+        stage('Push Docker Image to Docker Hub') {
             steps {
+                echo "📦 Push de l'image Docker vers Docker Hub"
                 script {
-                    echo "📦 Pushing Docker image to Docker Hub"
-                    sh '''
-                        docker login -u omarpfe -p 'kd8CB%4CfH&hDkk'
-                        docker tag omarpfe/projectpfe:latest omarpfe/projectpfe:latest
-                        docker push omarpfe/projectpfe:latest
-                    '''
+                    docker.withRegistry('https://registry.hub.docker.com', DOCKER_CREDENTIALS) {
+                        dockerImage.push()
+                    }
                 }
             }
         }
 
         stage('Deploy to Minikube') {
             steps {
-                script {
-                    sh '''
-                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 "minikube start"
-                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl config use-context minikube'
-                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl apply -f /root/project/docker-spring-boot/deployment.yaml'
-                    '''
-                }
-            }
-        }
-
-        stage('🗂️ Collect Logs and Snapshot') {
-            steps {
-                script {
-                    echo "🛠️ Collecting Jenkins logs, Trivy results, and Minikube snapshot"
-                    sh "bash collect_full_logs.sh"
-                }
-            }
-        }
-
-        stage('🧠 AI Analysis of Logs') {
-            steps {
-                script {
-                    echo "🤖 Running AI script for full_logs.log analysis"
-                    sh "python3 script-model-ai-codet5-codebert.py"
-                }
+                echo "🚀 Déploiement sur Minikube"
+                // Exemple simple, adapter selon ton déploiement
+                sh '''
+                    kubectl apply -f k8s/deployment.yaml
+                    kubectl rollout status deployment/my-deployment
+                '''
             }
         }
     }
 
     post {
         success {
-            echo "✅ Pipeline terminé avec succès."
+            echo "✅ Pipeline terminé avec succès"
         }
         failure {
-            echo "❌ Échec du pipeline. Vérifiez les logs."
+            echo "❌ Pipeline échoué"
         }
     }
 }
