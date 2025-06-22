@@ -67,16 +67,17 @@ pipeline {
             }
         }
 
-        stage('Setup Trivy Cache') {
+        stage('Initialize Trivy') {
             steps {
                 script {
                     sh "mkdir -p ${TRIVY_CACHE_DIR}"
-                    // Commande corrigée pour télécharger la DB
+                    // Nouvelle approche pour Trivy 0.56.0+
                     sh """
                         docker run --rm \
                             -v ${TRIVY_CACHE_DIR}:/root/.cache \
                             aquasec/trivy:latest \
-                            trivy --cache-dir /root/.cache image --download-db-only
+                            trivy image --cache-dir /root/.cache --download-db-only alpine:latest || \
+                            echo "Initialisation du cache Trivy (peut échouer sur les nouvelles versions)"
                     """
                 }
             }
@@ -85,7 +86,6 @@ pipeline {
         stage('Scan Docker Image with Trivy') {
             steps {
                 script {
-                    // Commande de scan corrigée
                     sh """
                         docker run --rm \
                             -v ${TRIVY_CACHE_DIR}:/root/.cache \
