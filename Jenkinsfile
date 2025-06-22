@@ -44,21 +44,32 @@ pipeline {
             }
         }
 
+        pipeline {
+    agent any
+
+    environment {
+        registry = "omarpfe/projectpfe"
+        TRIVY_CACHE_DIR = '/home/jenkins/trivy-cache'
+    }
+
+    stages {
+        // [Vos autres étapes...]
+
         stage('Scan Sécurité Trivy') {
             steps {
                 script {
                     sh """
                         mkdir -p ${TRIVY_CACHE_DIR}
-                        if [ ! -f "${TRIVY_CACHE_DIR}/db/metadata.json" ] || \\
-                           [ "\$(find "${TRIVY_CACHE_DIR}/db/metadata.json" -mtime +0)" ]; then
+                        # Téléchargement initial si nécessaire (seulement 1ère exécution)
+                        if [ ! -f "${TRIVY_CACHE_DIR}/db/metadata.json" ]; then
                             trivy --cache-dir ${TRIVY_CACHE_DIR} image --download-db-only
                         fi
-                    """
-                    
-                    sh """
+                        
+                        # Scan avec paramètres optimisés pour v0.47.0
                         trivy image \
                             --cache-dir ${TRIVY_CACHE_DIR} \
                             --skip-db-update \
+                            --scanners vuln \
                             --format table \
                             --severity HIGH,CRITICAL \
                             --exit-code 0 \
@@ -67,6 +78,8 @@ pipeline {
                 }
             }
         }
+    }
+}
 
         stage('Déploiement Docker Hub') {
             steps {
