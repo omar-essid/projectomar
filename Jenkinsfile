@@ -5,7 +5,7 @@ pipeline {
         registry = "omarpfe/projectpfe"
         registryCredential = 'dockerhub'
         SONAR_TOKEN = credentials('jenkins-sonar')
-        TRIVY_CACHE_DIR = '/trivy-cache'  // Volume Docker persistant
+        TRIVY_CACHE_DIR = '/trivy-cache'  // Volume persistant pour le cache
     }
 
     tools {
@@ -70,16 +70,23 @@ pipeline {
         stage('Initialiser Cache Trivy (Une fois)') {
             steps {
                 script {
-                    // Vérifie si la DB existe déjà dans le volume
-                    def dbExists = sh(script: "docker run --rm -v ${TRIVY_CACHE_DIR}:/cache alpine ls /cache/db 2>/dev/null | grep -q metadata.json", returnStatus: true) == 0
+                    // Vérifie si la DB existe déjà
+                    def dbExists = sh(script: """
+                        if [ -f "${TRIVY_CACHE_DIR}/db/metadata.json" ]; then 
+                            exit 0
+                        else 
+                            exit 1
+                        fi
+                    """, returnStatus: true) == 0
                     
                     if (!dbExists) {
-                        echo "⚠️ Initialisation du cache Trivy (UNIQUEMENT à la première exécution)"
+                        echo "⚠️ Téléchargement initial de la DB Trivy (seulement à la première exécution)"
                         sh """
+                            mkdir -p ${TRIVY_CACHE_DIR}
                             docker run --rm \
-                                -v ${TRIVY_CACHE_DIR}:/cache \
+                                -v ${TRIVY_CACHE_DIR}:/root/.cache \
                                 aquasec/trivy:latest \
-                                trivy image --download-db-only --cache-dir /cache
+                                trivy db --download-db-only --cache-dir /root/.cache
                         """
                     } else {
                         echo "✅ Cache Trivy déjà initialisé (pas de téléchargement)"
@@ -93,11 +100,11 @@ pipeline {
                 script {
                     sh """
                         docker run --rm \
-                            -v ${TRIVY_CACHE_DIR}:/cache \
+                            -v ${TRIVY_CACHE_DIR}:/root/.cache \
                             -v /var/run/docker.sock:/var/run/docker.sock \
                             aquasec/trivy:latest \
                             trivy image \
-                            --cache-dir /cache \
+                            --cache-dir /root/.cache \
                             --skip-db-update \
                             --skip-java-db-update \
                             --format table \
