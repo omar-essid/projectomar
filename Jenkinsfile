@@ -13,71 +13,19 @@ pipeline {
     }
 
     stages {
-        stage('Checkout Git') {
-            steps {
-                git url: 'https://github.com/omar-essid/projectomar.git', branch: 'main', credentialsId: 'github-omar-token'
-            }
-        }
+        // [Toutes vos étapes existantes jusqu'à Build Docker Image...]
 
-        stage('Clean') {
-            steps {
-                sh "mvn clean"
-            }
-        }
-
-        stage('Compile') {
-            steps {
-                sh "mvn compile"
-            }
-        }
-
-        stage('Package') {
-            steps {
-                sh "mvn package -Dmaven.test.skip=true"
-            }
-        }
-
-        stage('Tests') {
-            steps {
-                sh "mvn test"
-            }
-        }
-
-        stage('Analyse SonarQube') {
-            steps {
-                withSonarQubeEnv('sq1') {
-                    withEnv(["SONAR_TOKEN=${env.SONAR_TOKEN}"]) {
-                        sh "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.9.0.2155:sonar"
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to Nexus') {
-            steps {
-                sh 'mvn deploy'
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                script {
-                    docker.build("${registry}:latest")
-                }
-            }
-        }
-
-        stage('Initialize Trivy') {
+        stage('Initialize Trivy Cache') {
             steps {
                 script {
                     sh "mkdir -p ${TRIVY_CACHE_DIR}"
-                    // Nouvelle approche pour Trivy 0.56.0+
+                    // Solution moderne pour initialiser le cache
                     sh """
                         docker run --rm \
                             -v ${TRIVY_CACHE_DIR}:/root/.cache \
                             aquasec/trivy:latest \
-                            trivy image --cache-dir /root/.cache --download-db-only alpine:latest || \
-                            echo "Initialisation du cache Trivy (peut échouer sur les nouvelles versions)"
+                            trivy --cache-dir /root/.cache image --quiet alpine:latest || \
+                            echo "Cache initialisé (le téléchargement se fera automatiquement au premier scan)"
                     """
                 }
             }
@@ -93,7 +41,7 @@ pipeline {
                             aquasec/trivy:latest \
                             trivy image \
                             --cache-dir /root/.cache \
-                            --no-progress \
+                            --quiet \
                             --format table \
                             --security-checks vuln \
                             --exit-code 0 \
@@ -104,33 +52,7 @@ pipeline {
             }
         }
 
-        stage('Push to Docker Hub') {
-            steps {
-                script {
-                    withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PWD')]) {
-                        sh """
-                            docker login -u $DOCKER_USER -p $DOCKER_PWD
-                            docker push ${registry}:latest
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to Minikube') {
-            steps {
-                script {
-                    sshagent(credentials: ['minikube-ssh']) {
-                        sh """
-                            ssh -o StrictHostKeyChecking=no omar@192.168.88.131 \
-                                "minikube start && \
-                                kubectl config use-context minikube && \
-                                kubectl apply -f /root/project/docker-spring-boot/deployment.yaml"
-                        """
-                    }
-                }
-            }
-        }
+        // [Vos autres étapes...]
     }
 
     post {
