@@ -58,7 +58,7 @@ pipeline {
                     sh """
                         trivy image \
                             --cache-dir ${TRIVY_CACHE_DIR} \
-                            --skip-update \
+                            --skip-db-update \
                             --format table \
                             --severity HIGH,CRITICAL \
                             --exit-code 0 \
