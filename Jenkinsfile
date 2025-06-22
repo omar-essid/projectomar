@@ -5,7 +5,7 @@ pipeline {
         registry = "omarpfe/projectpfe"
         registryCredential = 'dockerhub'
         SONAR_TOKEN = credentials('jenkins-sonar')
-        TRIVY_CACHE_DIR = '/trivy-cache'  // Volume persistant pour le cache
+        TRIVY_CACHE_DIR = '/trivy-cache'  # Volume persistant
     }
 
     tools {
@@ -62,34 +62,30 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    dockerImage = docker.build("${registry}:latest")
+                    def dockerImage = docker.build("${registry}:latest")  # Correction: ajout de 'def'
                 }
             }
         }
 
-        stage('Initialiser Cache Trivy (Une fois)') {
+        stage('Setup Trivy Cache') {
             steps {
                 script {
+                    // Crée le dossier cache si inexistant
+                    sh "mkdir -p ${TRIVY_CACHE_DIR}"
+                    
                     // Vérifie si la DB existe déjà
-                    def dbExists = sh(script: """
-                        if [ -f "${TRIVY_CACHE_DIR}/db/metadata.json" ]; then 
-                            exit 0
-                        else 
-                            exit 1
-                        fi
-                    """, returnStatus: true) == 0
+                    def dbExists = sh(script: "test -f ${TRIVY_CACHE_DIR}/db/metadata.json", returnStatus: true) == 0
                     
                     if (!dbExists) {
-                        echo "⚠️ Téléchargement initial de la DB Trivy (seulement à la première exécution)"
+                        echo "🔵 Initialisation du cache Trivy (première exécution)"
                         sh """
-                            mkdir -p ${TRIVY_CACHE_DIR}
                             docker run --rm \
                                 -v ${TRIVY_CACHE_DIR}:/root/.cache \
                                 aquasec/trivy:latest \
-                                trivy db --download-db-only --cache-dir /root/.cache
+                                trivy image --download-db-only --cache-dir /root/.cache || echo "⚠️ Ignoré si la commande échoue avec les nouvelles versions"
                         """
                     } else {
-                        echo "✅ Cache Trivy déjà initialisé (pas de téléchargement)"
+                        echo "🟢 Cache Trivy déjà initialisé"
                     }
                 }
             }
@@ -107,6 +103,7 @@ pipeline {
                             --cache-dir /root/.cache \
                             --skip-db-update \
                             --skip-java-db-update \
+                            --no-progress \
                             --format table \
                             --scanners vuln \
                             --exit-code 0 \
@@ -120,12 +117,12 @@ pipeline {
         stage('Push to Docker Hub') {
             steps {
                 script {
-                    echo "Push Docker avec commande shell manuelle"
-                    sh '''
-                        docker login -u omarpfe -p 'kd8CB%4CfH&hDkk'
-                        docker tag omarpfe/projectpfe:latest omarpfe/projectpfe:latest
-                        docker push omarpfe/projectpfe:latest
-                    '''
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PWD')]) {
+                        sh """
+                            docker login -u $DOCKER_USER -p $DOCKER_PWD
+                            docker push ${registry}:latest
+                        """
+                    }
                 }
             }
         }
@@ -133,11 +130,14 @@ pipeline {
         stage('Deploy to Minikube') {
             steps {
                 script {
-                    sh '''
-                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 "minikube start"
-                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl config use-context minikube'
-                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl apply -f /root/project/docker-spring-boot/deployment.yaml'
-                    '''
+                    sshagent(credentials: ['minikube-ssh']) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no omar@192.168.88.131 \
+                                "minikube start && \
+                                kubectl config use-context minikube && \
+                                kubectl apply -f /root/project/docker-spring-boot/deployment.yaml"
+                        """
+                    }
                 }
             }
         }
@@ -145,13 +145,13 @@ pipeline {
         stage('Collect Full Logs') {
             steps {
                 script {
-                    echo "📦 Collecte des logs Jenkins, Trivy et configuration pod..."
-                    sh '''
-                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 '
-                            cd /root/project/docker-spring-boot &&
-                            bash collect_full_logs.sh
-                        '
-                    '''
+                    sshagent(credentials: ['minikube-ssh']) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no omar@192.168.88.131 \
+                                "cd /root/project/docker-spring-boot && \
+                                bash collect_full_logs.sh"
+                        """
+                    }
                 }
             }
         }
@@ -159,13 +159,13 @@ pipeline {
         stage('Analyse IA avec CodeT5 & CodeBERT') {
             steps {
                 script {
-                    echo "🤖 Exécution du script IA sur le fichier full_logs.log..."
-                    sh '''
-                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 '
-                            cd /root/project/docker-spring-boot &&
-                            python3 script-model-ai-codet5-codebert.py full_logs.log
-                        '
-                    '''
+                    sshagent(credentials: ['minikube-ssh']) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no omar@192.168.88.131 \
+                                "cd /root/project/docker-spring-boot && \
+                                python3 script-model-ai-codet5-codebert.py full_logs.log"
+                        """
+                    }
                 }
             }
         }
@@ -173,10 +173,15 @@ pipeline {
 
     post {
         success {
-            echo "✅ Pipeline terminé avec succès."
+            echo "✅ Pipeline exécuté avec succès"
+            slackSend(color: 'good', message: "Build SUCCEEDED: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
         }
         failure {
-            echo "❌ Échec du pipeline. Vérifiez les logs."
+            echo "❌ Échec du pipeline"
+            slackSend(color: 'danger', message: "Build FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
+        }
+        always {
+            cleanWs()  # Nettoyage du workspace
         }
     }
 }
