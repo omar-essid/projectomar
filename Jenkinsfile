@@ -5,7 +5,7 @@ pipeline {
         registry = "omarpfe/projectpfe"
         registryCredential = 'dockerhub'
         SONAR_TOKEN = credentials('jenkins-sonar')
-        TRIVY_CACHE_DIR = '/trivy-cache'  // Volume persistant
+        TRIVY_CACHE_DIR = '/home/jenkins/trivy-cache'  # Chemin absolu pour le cache
     }
 
     tools {
@@ -13,54 +13,105 @@ pipeline {
     }
 
     stages {
-        // [Toutes vos étapes existantes jusqu'à Build Docker Image...]
-
-        stage('Initialize Trivy Cache') {
+        stage('Checkout Git') {
             steps {
-                script {
-                    sh "mkdir -p ${TRIVY_CACHE_DIR}"
-                    // Solution moderne pour initialiser le cache
-                    sh """
-                        docker run --rm \
-                            -v ${TRIVY_CACHE_DIR}:/root/.cache \
-                            aquasec/trivy:latest \
-                            trivy --cache-dir /root/.cache image --quiet alpine:latest || \
-                            echo "Cache initialisé (le téléchargement se fera automatiquement au premier scan)"
-                    """
+                git url: 'https://github.com/omar-essid/projectomar.git', 
+                     branch: 'main', 
+                     credentialsId: 'github-omar-token'
+            }
+        }
+
+        stage('Build et Tests') {
+            steps {
+                sh "mvn clean package -Dmaven.test.skip=true"
+                sh "mvn test"
+            }
+        }
+
+        stage('Analyse SonarQube') {
+            steps {
+                withSonarQubeEnv('sq1') {
+                    sh "mvn sonar:sonar -Dsonar.login=${env.SONAR_TOKEN}"
                 }
             }
         }
 
-        stage('Scan Docker Image with Trivy') {
+        stage('Build Docker Image') {
             steps {
                 script {
+                    docker.build("${registry}:latest")
+                }
+            }
+        }
+
+        stage('Scan Sécurité Trivy') {
+            steps {
+                script {
+                    // 1. Initialisation du cache
                     sh """
-                        docker run --rm \
-                            -v ${TRIVY_CACHE_DIR}:/root/.cache \
-                            -v /var/run/docker.sock:/var/run/docker.sock \
-                            aquasec/trivy:latest \
-                            trivy image \
-                            --cache-dir /root/.cache \
-                            --quiet \
+                        mkdir -p ${TRIVY_CACHE_DIR}
+                        # Mise à jour DB seulement si >24h
+                        if [ ! -f "${TRIVY_CACHE_DIR}/db/metadata.json" ] || \\
+                           [ "\$(find "${TRIVY_CACHE_DIR}/db/metadata.json" -mtime +0)" ]; then
+                            trivy --cache-dir ${TRIVY_CACHE_DIR} image --download-db-only
+                        fi
+                    """
+                    
+                    // 2. Exécution du scan
+                    sh """
+                        trivy image \
+                            --cache-dir ${TRIVY_CACHE_DIR} \
+                            --skip-update \
                             --format table \
-                            --security-checks vuln \
-                            --exit-code 0 \
                             --severity HIGH,CRITICAL \
+                            --exit-code 0 \
                             ${registry}:latest
                     """
                 }
             }
         }
 
-        // [Vos autres étapes...]
+        stage('Déploiement Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PWD'
+                )]) {
+                    sh """
+                        docker login -u $DOCKER_USER -p $DOCKER_PWD
+                        docker push ${registry}:latest
+                    """
+                }
+            }
+        }
+
+        stage('Déploiement Minikube') {
+            steps {
+                sshagent(['minikube-ssh']) {
+                    sh """
+                        ssh -o StrictHostKeyChecking=no omar@192.168.88.131 \
+                            "kubectl config use-context minikube && \
+                             kubectl apply -f /root/project/docker-spring-boot/deployment.yaml"
+                    """
+                }
+            }
+        }
     }
 
     post {
         success {
-            echo "✅ Pipeline exécuté avec succès"
+            echo '✅ Déploiement réussi'
+            slackSend color: 'good', 
+                     message: "SUCCÈS: Build ${env.BUILD_NUMBER} déployé"
         }
         failure {
-            echo "❌ Échec du pipeline"
+            echo '❌ Échec du pipeline'
+            slackSend color: 'danger', 
+                     message: "ÉCHEC: Build ${env.BUILD_NUMBER} a échoué"
+        }
+        always {
+            cleanWs()  # Nettoyage du workspace
         }
     }
 }
