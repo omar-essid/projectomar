@@ -5,7 +5,6 @@ pipeline {
         registry = "omarpfe/projectpfe"
         registryCredential = 'dockerhub'
         SONAR_TOKEN = credentials('jenkins-sonar')
-        TRIVY_CACHE_DIR = '/home/jenkins/trivy-cache'
     }
 
     tools {
@@ -13,47 +12,80 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
+        stage('Checkout Git') {
             steps {
-                checkout scm
+                git url: 'https://github.com/omar-essid/projectomar.git', branch: 'main', credentialsId: 'github-omar-token'
             }
         }
 
-        stage('Build') {
+        stage('Clean') {
             steps {
-                sh 'mvn clean package -Dmaven.test.skip=true'
+                sh "mvn clean"
+            }
+        }
+
+        stage('Compile') {
+            steps {
+                sh "mvn compile"
+            }
+        }
+
+        stage('Package') {
+            steps {
+                sh "mvn package -Dmaven.test.skip=true"
             }
         }
 
         stage('Tests') {
             steps {
-                sh 'mvn test'
+                sh "mvn test"
             }
         }
 
-        stage('SonarQube Analysis') {
+        stage('Analyse SonarQube') {
             steps {
                 withSonarQubeEnv('sq1') {
-                    sh "mvn sonar:sonar -Dsonar.login=${SONAR_TOKEN}"
+                    withEnv(["SONAR_TOKEN=${env.SONAR_TOKEN}"]) {
+                        sh "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.9.0.2155:sonar"
+                    }
                 }
+            }
+        }
+
+        stage('Deploy to Nexus') {
+            steps {
+                sh 'mvn deploy'
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    docker.build("${registry}:latest")
+                    dockerImage = docker.build("${registry}:latest")
                 }
             }
         }
 
-        stage('Security Scan') {
+        stage('Scan Docker Image with Trivy') {
             steps {
                 script {
-                    sh """
-                        mkdir -p ${TRIVY_CACHE_DIR}
-                        trivy --cache-dir ${TRIVY_CACHE_DIR} image --skip-db-update --scanners vuln --severity HIGH,CRITICAL --exit-code 0 ${registry}:latest
-                    """
+                    def cacheDir = '/home/jenkins/trivy-cache'
+                    def dbFilesExist = sh(script: "test -d ${cacheDir}/db", returnStatus: true) == 0
+
+                    if (!dbFilesExist) {
+                        echo "⚠️ Base Trivy absente dans ${cacheDir}. Le scan est ignoré. Téléchargez-la manuellement si nécessaire."
+                    } else {
+                        sh """
+                            trivy image \
+                            --timeout 10m \
+                            --cache-dir ${cacheDir} \
+                            --format table \
+                            --scanners vuln \
+                            --exit-code 0 \
+                            --severity HIGH,CRITICAL \
+                            ${registry}:latest
+                        """
+                    }
                 }
             }
         }
@@ -61,42 +93,53 @@ pipeline {
         stage('Push to Docker Hub') {
             steps {
                 script {
-                    withCredentials([usernamePassword(
-                        credentialsId: 'dockerhub',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PWD'
-                    )]) {
-                        sh """
-                            docker login -u $DOCKER_USER -p $DOCKER_PWD
-                            docker push ${registry}:latest
-                        """
-                    }
+                    echo "📦 Pushing Docker image to Docker Hub"
+                    sh '''
+                        docker login -u omarpfe -p 'kd8CB%4CfH&hDkk'
+                        docker tag omarpfe/projectpfe:latest omarpfe/projectpfe:latest
+                        docker push omarpfe/projectpfe:latest
+                    '''
                 }
             }
         }
 
         stage('Deploy to Minikube') {
             steps {
-                sshagent(['minikube-ssh']) {
-                    sh """
-                        ssh -o StrictHostKeyChecking=no omar@192.168.88.131 \
-                            "kubectl config use-context minikube && \
-                             kubectl apply -f /root/project/docker-spring-boot/deployment.yaml"
-                    """
+                script {
+                    sh '''
+                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 "minikube start"
+                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl config use-context minikube'
+                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl apply -f /root/project/docker-spring-boot/deployment.yaml'
+                    '''
+                }
+            }
+        }
+
+        stage('🗂️ Collect Logs and Snapshot') {
+            steps {
+                script {
+                    echo "🛠️ Collecting Jenkins logs, Trivy results, and Minikube snapshot"
+                    sh "bash collect_full_logs.sh"
+                }
+            }
+        }
+
+        stage('🧠 AI Analysis of Logs') {
+            steps {
+                script {
+                    echo "🤖 Running AI script for full_logs.log analysis"
+                    sh "python3 script-model-ai-codet5-codebert.py"
                 }
             }
         }
     }
 
     post {
-        always {
-            cleanWs()
-        }
         success {
-            slackSend color: 'good', message: "SUCCESS: Build ${env.BUILD_NUMBER}"
+            echo "✅ Pipeline terminé avec succès."
         }
         failure {
-            slackSend color: 'danger', message: "FAILED: Build ${env.BUILD_NUMBER}"
+            echo "❌ Échec du pipeline. Vérifiez les logs."
         }
     }
 }
