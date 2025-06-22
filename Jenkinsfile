@@ -5,6 +5,7 @@ pipeline {
         registry = "omarpfe/projectpfe"
         registryCredential = 'dockerhub'
         SONAR_TOKEN = credentials('jenkins-sonar')
+        TRIVY_CACHE_DIR = '/trivy-cache'  // Volume Docker persistant
     }
 
     tools {
@@ -66,33 +67,48 @@ pipeline {
             }
         }
 
-               stage('Scan Docker Image with Trivy') {
+        stage('Initialiser Cache Trivy (Une fois)') {
             steps {
                 script {
-                    def cacheDir = '/home/jenkins/trivy-cache'
-                    def dbFilesExist = sh(script: "test -d ${cacheDir}/db && test -f ${cacheDir}/fanal/fanal.db", returnStatus: true) == 0
-
-                    if (!dbFilesExist) {
-                        echo "⚠️ Cache Trivy absent ou incomplet → téléchargement requis (1ère fois uniquement)"
-                        sh "trivy image --download-db-only --cache-dir ${cacheDir}"
+                    // Vérifie si la DB existe déjà dans le volume
+                    def dbExists = sh(script: "docker run --rm -v ${TRIVY_CACHE_DIR}:/cache alpine ls /cache/db 2>/dev/null | grep -q metadata.json", returnStatus: true) == 0
+                    
+                    if (!dbExists) {
+                        echo "⚠️ Initialisation du cache Trivy (UNIQUEMENT à la première exécution)"
+                        sh """
+                            docker run --rm \
+                                -v ${TRIVY_CACHE_DIR}:/cache \
+                                aquasec/trivy:latest \
+                                trivy image --download-db-only --cache-dir /cache
+                        """
                     } else {
-                        echo "✅ Cache Trivy détecté → analyse sans téléchargement"
+                        echo "✅ Cache Trivy déjà initialisé (pas de téléchargement)"
                     }
-
-                    sh """
-                        trivy image \
-                        --timeout 10m \
-                        --cache-dir ${cacheDir} \
-                        --format table \
-                        --scanners vuln \
-                        --exit-code 0 \
-                        --severity HIGH,CRITICAL \
-                        ${registry}:latest
-                    """
                 }
             }
         }
 
+        stage('Scan Docker Image with Trivy') {
+            steps {
+                script {
+                    sh """
+                        docker run --rm \
+                            -v ${TRIVY_CACHE_DIR}:/cache \
+                            -v /var/run/docker.sock:/var/run/docker.sock \
+                            aquasec/trivy:latest \
+                            trivy image \
+                            --cache-dir /cache \
+                            --skip-db-update \
+                            --skip-java-db-update \
+                            --format table \
+                            --scanners vuln \
+                            --exit-code 0 \
+                            --severity HIGH,CRITICAL \
+                            ${registry}:latest
+                    """
+                }
+            }
+        }
 
         stage('Push to Docker Hub') {
             steps {
