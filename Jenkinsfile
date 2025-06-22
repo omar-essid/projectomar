@@ -5,7 +5,7 @@ pipeline {
         registry = "omarpfe/projectpfe"
         registryCredential = 'dockerhub'
         SONAR_TOKEN = credentials('jenkins-sonar')
-        TRIVY_CACHE_DIR = '/home/jenkins/trivy-cache'  # Chemin absolu pour le cache
+        TRIVY_CACHE_DIR = '/home/jenkins/trivy-cache'
     }
 
     tools {
@@ -47,17 +47,14 @@ pipeline {
         stage('Scan Sécurité Trivy') {
             steps {
                 script {
-                    // 1. Initialisation du cache
                     sh """
                         mkdir -p ${TRIVY_CACHE_DIR}
-                        # Mise à jour DB seulement si >24h
                         if [ ! -f "${TRIVY_CACHE_DIR}/db/metadata.json" ] || \\
                            [ "\$(find "${TRIVY_CACHE_DIR}/db/metadata.json" -mtime +0)" ]; then
                             trivy --cache-dir ${TRIVY_CACHE_DIR} image --download-db-only
                         fi
                     """
                     
-                    // 2. Exécution du scan
                     sh """
                         trivy image \
                             --cache-dir ${TRIVY_CACHE_DIR} \
@@ -91,7 +88,7 @@ pipeline {
                 sshagent(['minikube-ssh']) {
                     sh """
                         ssh -o StrictHostKeyChecking=no omar@192.168.88.131 \
-                            "kubectl config use-context minikube && \
+                            "kubectl config use-context minikube && \\
                              kubectl apply -f /root/project/docker-spring-boot/deployment.yaml"
                     """
                 }
@@ -101,17 +98,17 @@ pipeline {
 
     post {
         success {
-            echo '✅ Déploiement réussi'
+            echo 'Déploiement réussi'
             slackSend color: 'good', 
                      message: "SUCCÈS: Build ${env.BUILD_NUMBER} déployé"
         }
         failure {
-            echo '❌ Échec du pipeline'
+            echo 'Échec du pipeline'
             slackSend color: 'danger', 
                      message: "ÉCHEC: Build ${env.BUILD_NUMBER} a échoué"
         }
         always {
-            cleanWs()  # Nettoyage du workspace
+            cleanWs()
         }
     }
 }
