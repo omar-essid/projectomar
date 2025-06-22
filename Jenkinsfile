@@ -71,11 +71,12 @@ pipeline {
             steps {
                 script {
                     sh "mkdir -p ${TRIVY_CACHE_DIR}"
+                    // Nouvelle syntaxe pour télécharger la DB
                     sh """
                         docker run --rm \
                             -v ${TRIVY_CACHE_DIR}:/root/.cache \
                             aquasec/trivy:latest \
-                            trivy image --download-db-only --cache-dir /root/.cache || true
+                            trivy db download --cache-dir /root/.cache
                     """
                 }
             }
@@ -84,6 +85,7 @@ pipeline {
         stage('Scan Docker Image with Trivy') {
             steps {
                 script {
+                    // Nouvelle syntaxe pour le scan
                     sh """
                         docker run --rm \
                             -v ${TRIVY_CACHE_DIR}:/root/.cache \
@@ -91,11 +93,9 @@ pipeline {
                             aquasec/trivy:latest \
                             trivy image \
                             --cache-dir /root/.cache \
-                            --skip-db-update \
-                            --skip-java-db-update \
                             --no-progress \
                             --format table \
-                            --scanners vuln \
+                            --security-checks vuln \
                             --exit-code 0 \
                             --severity HIGH,CRITICAL \
                             ${registry}:latest
