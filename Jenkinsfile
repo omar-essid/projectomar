@@ -13,25 +13,28 @@ pipeline {
     }
 
     stages {
-        stage('Checkout Git') {
+        stage('Checkout') {
             steps {
-                git url: 'https://github.com/omar-essid/projectomar.git', 
-                     branch: 'main', 
-                     credentialsId: 'github-omar-token'
+                checkout scm
             }
         }
 
-        stage('Build et Tests') {
+        stage('Build') {
             steps {
-                sh "mvn clean package -Dmaven.test.skip=true"
-                sh "mvn test"
+                sh 'mvn clean package -Dmaven.test.skip=true'
             }
         }
 
-        stage('Analyse SonarQube') {
+        stage('Tests') {
+            steps {
+                sh 'mvn test'
+            }
+        }
+
+        stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('sq1') {
-                    sh "mvn sonar:sonar -Dsonar.login=${env.SONAR_TOKEN}"
+                    sh "mvn sonar:sonar -Dsonar.login=${SONAR_TOKEN}"
                 }
             }
         }
@@ -44,64 +47,40 @@ pipeline {
             }
         }
 
-        pipeline {
-    agent any
-
-    environment {
-        registry = "omarpfe/projectpfe"
-        TRIVY_CACHE_DIR = '/home/jenkins/trivy-cache'
-    }
-
-    stages {
-        // [Vos autres étapes...]
-
-        stage('Scan Sécurité Trivy') {
+        stage('Security Scan') {
             steps {
                 script {
                     sh """
                         mkdir -p ${TRIVY_CACHE_DIR}
-                        # Téléchargement initial si nécessaire (seulement 1ère exécution)
-                        if [ ! -f "${TRIVY_CACHE_DIR}/db/metadata.json" ]; then
-                            trivy --cache-dir ${TRIVY_CACHE_DIR} image --download-db-only
-                        fi
-                        
-                        # Scan avec paramètres optimisés pour v0.47.0
-                        trivy image \
-                            --cache-dir ${TRIVY_CACHE_DIR} \
-                            --skip-db-update \
-                            --scanners vuln \
-                            --format table \
-                            --severity HIGH,CRITICAL \
-                            --exit-code 0 \
-                            ${registry}:latest
+                        trivy --cache-dir ${TRIVY_CACHE_DIR} image --skip-db-update --scanners vuln --severity HIGH,CRITICAL --exit-code 0 ${registry}:latest
                     """
                 }
             }
         }
-    }
-}
 
-        stage('Déploiement Docker Hub') {
+        stage('Push to Docker Hub') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PWD'
-                )]) {
-                    sh """
-                        docker login -u $DOCKER_USER -p $DOCKER_PWD
-                        docker push ${registry}:latest
-                    """
+                script {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'dockerhub',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PWD'
+                    )]) {
+                        sh """
+                            docker login -u $DOCKER_USER -p $DOCKER_PWD
+                            docker push ${registry}:latest
+                        """
+                    }
                 }
             }
         }
 
-        stage('Déploiement Minikube') {
+        stage('Deploy to Minikube') {
             steps {
                 sshagent(['minikube-ssh']) {
                     sh """
                         ssh -o StrictHostKeyChecking=no omar@192.168.88.131 \
-                            "kubectl config use-context minikube && \\
+                            "kubectl config use-context minikube && \
                              kubectl apply -f /root/project/docker-spring-boot/deployment.yaml"
                     """
                 }
@@ -110,18 +89,14 @@ pipeline {
     }
 
     post {
-        success {
-            echo 'Déploiement réussi'
-            slackSend color: 'good', 
-                     message: "SUCCÈS: Build ${env.BUILD_NUMBER} déployé"
-        }
-        failure {
-            echo 'Échec du pipeline'
-            slackSend color: 'danger', 
-                     message: "ÉCHEC: Build ${env.BUILD_NUMBER} a échoué"
-        }
         always {
             cleanWs()
+        }
+        success {
+            slackSend color: 'good', message: "SUCCESS: Build ${env.BUILD_NUMBER}"
+        }
+        failure {
+            slackSend color: 'danger', message: "FAILED: Build ${env.BUILD_NUMBER}"
         }
     }
 }
