@@ -5,6 +5,7 @@ pipeline {
         registry = "omarpfe/projectpfe"
         registryCredential = 'dockerhub'
         SONAR_TOKEN = credentials('jenkins-sonar')
+        TRIVY_CACHE_DIR = '/trivy-cache'  // Volume persistant
     }
 
     tools {
@@ -61,7 +62,22 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    dockerImage = docker.build("${registry}:latest")
+                    docker.build("${registry}:latest")
+                }
+            }
+        }
+
+        stage('Setup Trivy Cache') {
+            steps {
+                script {
+                    sh "mkdir -p ${TRIVY_CACHE_DIR}"
+                    // Commande corrigée pour télécharger la DB
+                    sh """
+                        docker run --rm \
+                            -v ${TRIVY_CACHE_DIR}:/root/.cache \
+                            aquasec/trivy:latest \
+                            trivy --cache-dir /root/.cache image --download-db-only
+                    """
                 }
             }
         }
@@ -69,49 +85,49 @@ pipeline {
         stage('Scan Docker Image with Trivy') {
             steps {
                 script {
-                    def cacheDir = '/home/jenkins/trivy-cache'
-                    def dbFilesExist = sh(script: "test -d ${cacheDir}/db", returnStatus: true) == 0
-
-                    if (!dbFilesExist) {
-                        echo "⚠️ Base Trivy absente dans ${cacheDir}. Le scan est ignoré. Téléchargez-la manuellement si nécessaire."
-                    } else {
-                        sh """
+                    // Commande de scan corrigée
+                    sh """
+                        docker run --rm \
+                            -v ${TRIVY_CACHE_DIR}:/root/.cache \
+                            -v /var/run/docker.sock:/var/run/docker.sock \
+                            aquasec/trivy:latest \
                             trivy image \
-                            --timeout 10m \
-                            --cache-dir ${cacheDir} \
+                            --cache-dir /root/.cache \
+                            --no-progress \
                             --format table \
-                            --scanners vuln \
+                            --security-checks vuln \
                             --exit-code 0 \
                             --severity HIGH,CRITICAL \
                             ${registry}:latest
+                    """
+                }
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PWD')]) {
+                        sh """
+                            docker login -u $DOCKER_USER -p $DOCKER_PWD
+                            docker push ${registry}:latest
                         """
                     }
                 }
             }
         }
 
-        stage('Push to Docker Hub') {
-    steps {
-        script {
-            echo "Push Docker avec commande shell manuelle"
-            sh '''
-                docker login -u omarpfe -p 'kd8CB%4CfH&hDkk'
-                docker tag omarpfe/projectpfe:latest omarpfe/projectpfe:latest
-                docker push omarpfe/projectpfe:latest
-            '''
-        }
-    }
-}
-
-
         stage('Deploy to Minikube') {
             steps {
                 script {
-                    sh '''
-                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 "minikube start"
-                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl config use-context minikube'
-                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl apply -f /root/project/docker-spring-boot/deployment.yaml'
-                    '''
+                    sshagent(credentials: ['minikube-ssh']) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no omar@192.168.88.131 \
+                                "minikube start && \
+                                kubectl config use-context minikube && \
+                                kubectl apply -f /root/project/docker-spring-boot/deployment.yaml"
+                        """
+                    }
                 }
             }
         }
@@ -119,10 +135,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Pipeline terminé avec succès."
+            echo "✅ Pipeline exécuté avec succès"
         }
         failure {
-            echo "❌ Échec du pipeline. Vérifiez les logs."
+            echo "❌ Échec du pipeline"
         }
     }
 }
