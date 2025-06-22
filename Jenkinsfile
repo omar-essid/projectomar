@@ -66,29 +66,33 @@ pipeline {
             }
         }
 
-        stage('Scan Docker Image with Trivy') {
+               stage('Scan Docker Image with Trivy') {
             steps {
                 script {
                     def cacheDir = '/home/jenkins/trivy-cache'
-                    def dbFilesExist = sh(script: "test -d ${cacheDir}/db", returnStatus: true) == 0
+                    def dbFilesExist = sh(script: "test -d ${cacheDir}/db && test -f ${cacheDir}/fanal/fanal.db", returnStatus: true) == 0
 
                     if (!dbFilesExist) {
-                        echo "⚠️ Base Trivy absente dans ${cacheDir}. Le scan est ignoré. Téléchargez-la manuellement si nécessaire."
+                        echo "⚠️ Cache Trivy absent ou incomplet → téléchargement requis (1ère fois uniquement)"
+                        sh "trivy image --download-db-only --cache-dir ${cacheDir}"
                     } else {
-                        sh """
-                            trivy image \
-                            --timeout 10m \
-                            --cache-dir ${cacheDir} \
-                            --format table \
-                            --scanners vuln \
-                            --exit-code 0 \
-                            --severity HIGH,CRITICAL \
-                            ${registry}:latest
-                        """
+                        echo "✅ Cache Trivy détecté → analyse sans téléchargement"
                     }
+
+                    sh """
+                        trivy image \
+                        --timeout 10m \
+                        --cache-dir ${cacheDir} \
+                        --format table \
+                        --scanners vuln \
+                        --exit-code 0 \
+                        --severity HIGH,CRITICAL \
+                        ${registry}:latest
+                    """
                 }
             }
         }
+
 
         stage('Push to Docker Hub') {
             steps {
