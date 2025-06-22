@@ -91,18 +91,17 @@ pipeline {
         }
 
         stage('Push to Docker Hub') {
-    steps {
-        script {
-            echo "Push Docker avec commande shell manuelle"
-            sh '''
-                docker login -u omarpfe -p 'kd8CB%4CfH&hDkk'
-                docker tag omarpfe/projectpfe:latest omarpfe/projectpfe:latest
-                docker push omarpfe/projectpfe:latest
-            '''
+            steps {
+                script {
+                    echo "Push Docker avec commande shell manuelle"
+                    sh '''
+                        docker login -u omarpfe -p 'kd8CB%4CfH&hDkk'
+                        docker tag omarpfe/projectpfe:latest omarpfe/projectpfe:latest
+                        docker push omarpfe/projectpfe:latest
+                    '''
+                }
+            }
         }
-    }
-}
-
 
         stage('Deploy to Minikube') {
             steps {
@@ -111,6 +110,34 @@ pipeline {
                         sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 "minikube start"
                         sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl config use-context minikube'
                         sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 'kubectl apply -f /root/project/docker-spring-boot/deployment.yaml'
+                    '''
+                }
+            }
+        }
+
+        stage('Collect Full Logs') {
+            steps {
+                script {
+                    echo "📦 Collecte des logs Jenkins, Trivy et configuration pod..."
+                    sh '''
+                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 '
+                            cd /root/project/docker-spring-boot &&
+                            bash collect_full_logs.sh
+                        '
+                    '''
+                }
+            }
+        }
+
+        stage('Analyse IA avec CodeT5 & CodeBERT') {
+            steps {
+                script {
+                    echo "🤖 Exécution du script IA sur le fichier full_logs.log..."
+                    sh '''
+                        sshpass -p 'omar' ssh -o StrictHostKeyChecking=no omar@192.168.88.131 '
+                            cd /root/project/docker-spring-boot &&
+                            python3 script-model-ai-codet5-codebert.py full_logs.log
+                        '
                     '''
                 }
             }
