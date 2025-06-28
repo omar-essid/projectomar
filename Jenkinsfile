@@ -77,7 +77,7 @@ pipeline {
                     } else {
                         sh """
                             trivy image \
-                            --timeout 10m \
+                            --timeout 60m \
                             --cache-dir ${cacheDir} \
                             --format table \
                             --scanners vuln \
