@@ -11,7 +11,7 @@ services:
 
 
   spring_app:
-    image: thourayalouati/devopsimage23
+    image: omar/devopsimage:v1
     container_name: devopscontainer
     restart: on-failure
     ports:
