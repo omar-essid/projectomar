@@ -27,6 +27,6 @@ spec:
   ports:
   - port: 8083       # Port d'exposition du service
     targetPort: 8083  # Port dans le conteneur
-    nodePort: 30083   # Port externe pour accéder à l'application
+    nodePort: 30085   # Port externe pour accéder à l'application
   selector:
     app: spring-boot-app
